@@ -213,15 +213,16 @@ class NetworkUtils:
     @staticmethod
     def dense_layer(x, dims, name=None):
         # TODO: Perhaps write our own function for this?
-        return tf.layers.dense(x, dims, use_bias=False, name=name) # TODO: Perhaps use bias?
+        return tf.layers.dense(x, dims, use_bias=False, name=name)  # TODO: Perhaps use bias?
 
     @staticmethod
     def calc_perplexity(probs, indices):
-        print("probs", probs.get_shape())
-        print("indices", indices.get_shape())
-        epsilon = 1e-8
-        mask = indices != BASE_VOCAB[PAD_SYMBOL]
-        return tf.exp(-tf.reduce_mean(tf.log(tf.maximum(probs, epsilon)) * mask, axis=1))
+        with tf.name_scope("perplexity"):
+            print("probs", probs.get_shape())
+            print("indices", indices.get_shape())
+            epsilon = 1e-8
+            mask = indices != BASE_VOCAB[PAD_SYMBOL]
+            return tf.exp(-tf.reduce_mean(tf.log(tf.maximum(probs, epsilon)) * mask, axis=1))
 
 
 class Network:
@@ -258,8 +259,14 @@ class Network:
             for n_batch in range(indices.shape[0]):
                 # print("indices[n_batch]", indices[n_batch].shape)
                 batch_result = [self.dataset.inv_vocab[i] for i in indices[n_batch]]
-                result.append(" ".join(batch_result))
-            return "\x60{}\x60".format(result)
+                batch_unpadded = []
+                for word in batch_result:
+                    if word.strip() == EOS_SYMBOL.strip():
+                        break
+                    batch_unpadded.append(word)
+                result.append(" ".join(batch_unpadded))
+            result = ["{}. \x60{}\x60".format(i, r) for i, r in enumerate(result)]
+            return "\n".join(result)
         sentences = tf.py_func(lookup, [indices], tf.string)
         return tf.summary.text(name, sentences)
 
@@ -320,20 +327,21 @@ class Network:
             next_word_probs = []
             pred_indices = []
             range_batch_size = tf.range(batch_size)
-            for i in range(SENTENCE_LEN - 1):
-                word, next_word_index = self.word_embeddings[:, i, :], self.words_input[:, i + 1]
-                x, state = self.rnn_cell(word, state)
-                x = self.output_layer(x, reuse=(i > 0))
-                probs = tf.nn.softmax(x, name="softmax_probs")
-                pred_indices.append(tf.argmax(x, axis=1))
-                indices_to_gather = tf.stack([range_batch_size, next_word_index], axis=1)
-                # print("indices_to_gather", indices_to_gather.get_shape())
-                p = tf.gather_nd(probs, indices_to_gather)
-                # print("word_probs_p", p.get_shape())
-                next_word_probs.append(p)
-                self.loss += tf.losses.compute_weighted_loss(
-                    tf.nn.sparse_softmax_cross_entropy_with_logits(
-                        logits=x, labels=next_word_index, name="word_loss"))
+            with tf.name_scope("rnnloop"):
+                for i in range(SENTENCE_LEN - 1):
+                    word, next_word_index = self.word_embeddings[:, i, :], self.words_input[:, i + 1]
+                    x, state = self.rnn_cell(word, state)
+                    x = self.output_layer(x, reuse=(i > 0))
+                    probs = tf.nn.softmax(x, name="softmax_probs")
+                    pred_indices.append(tf.argmax(x, axis=1))
+                    indices_to_gather = tf.stack([range_batch_size, next_word_index], axis=1)
+                    # print("indices_to_gather", indices_to_gather.get_shape())
+                    p = tf.gather_nd(probs, indices_to_gather)
+                    # print("word_probs_p", p.get_shape())
+                    next_word_probs.append(p)
+                    self.loss += tf.losses.compute_weighted_loss(
+                        tf.nn.sparse_softmax_cross_entropy_with_logits(
+                            logits=x, labels=next_word_index, name="word_loss"))
 
             self.pred_indices = tf.stack(pred_indices, axis=1)
             print("pred_indices", self.pred_indices.get_shape())
@@ -402,7 +410,7 @@ class Network:
         outputs = self.session.run(targets, feed_dict={self.words_input: inputs})
 
         if monitor and train:
-            self.summary_writer.add_summary(outputs[3], global_step=outputs[1])
+            self.summary_writer.add_summary(outputs[3], global_step=outputs[0])
 
         if monitor:
             return outputs[1:3]
@@ -445,10 +453,9 @@ class Network:
             result.append(last_word)
         return result
 
-    # TODO: Fix this method. 
     def finish_sentences(self, dataset, sentences, predict_len):
         init_state = self.session.run([self.zero_state1, self.zero_state2], feed_dict={
-                                       self.words_input: np.arange((1, SENTENCE_LEN))})
+            self.words_input: np.arange((1, SENTENCE_LEN))})
         result = []
         for sentence in sentences:
             # Encode the sentence and trim the EOS symbol
@@ -462,9 +469,9 @@ class Network:
     def run(self, dataset, batch_size, epochs):
         for epoch in range(epochs):
             print("Epoch", epoch)
-            for n_batch, batch in enumerate(dataset.batches_per_epoch_generator(batch_size)):
+            for n_batch, batch in enumerate(dataset.batches_per_epoch_generator(batch_size, data=dataset.train_data)):
                 self.run_batch(batch, train=True, monitor=n_batch % 50 == 0)
-            
+
             perplexities = self.eval(dataset, batch_size)
             # Save the model and all the perplexities
             self.saver.save(self.session, self.save_path, global_step=epoch)
