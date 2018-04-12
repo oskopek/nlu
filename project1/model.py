@@ -366,22 +366,21 @@ class Network:
             self.man_out_state1, self.man_out_state2 = state
 
     def _summaries(self):
-        with tf.name_scope("summaries"):
-            train_perplexity_summ = tf.summary.scalar("train/avg_perplexity", tf.reduce_mean(self.perplexity))
-            train_loss_summ = tf.summary.scalar("train/loss", self.loss)
-            # The text prediction summaries don't work with lower versions of TF:
-            train_text_truth_summ = self.create_sentences("train/ground_truth", self.words_input[:, 1:])
-            train_text_predict_summ = self.create_sentences("train/predicted", self.pred_indices)
+        train_perplexity_summ = tf.summary.scalar("train/avg_perplexity", tf.reduce_mean(self.perplexity))
+        train_loss_summ = tf.summary.scalar("train/loss", self.loss)
+        # The text prediction summaries don't work with lower versions of TF:
+        train_text_truth_summ = self.create_sentences("train/ground_truth", self.words_input[:, 1:])
+        train_text_predict_summ = self.create_sentences("train/predicted", self.pred_indices)
 
-            train_summaries = [train_perplexity_summ, train_loss_summ, train_text_truth_summ, train_text_predict_summ]
-            self.train_summaries = tf.summary.merge(train_summaries, name="train_summaries")
+        train_summaries = [train_perplexity_summ, train_loss_summ, train_text_truth_summ, train_text_predict_summ]
+        self.train_summaries = tf.summary.merge(train_summaries, name="train_summaries")
 
-            self.save_test_perplexity = tf.placeholder(tf.float32, [], name="save_test_perplexity")
-            self.save_test_loss = tf.placeholder(tf.float32, [], name="save_test_loss")
-            test_avg_perplexity_summ = tf.summary.scalar("test/avg_perplexity", self.save_test_perplexity)
-            test_avg_loss_summ = tf.summary.scalar("test/loss", self.save_test_loss)
-            test_summaries = [test_avg_perplexity_summ, test_avg_loss_summ]
-            self.test_summaries = tf.summary.merge(test_summaries, name="test_summaries")
+        self.save_test_perplexity = tf.placeholder(tf.float32, [], name="save_test_perplexity")
+        self.save_test_loss = tf.placeholder(tf.float32, [], name="save_test_loss")
+        test_avg_perplexity_summ = tf.summary.scalar("test/avg_perplexity", self.save_test_perplexity)
+        test_avg_loss_summ = tf.summary.scalar("test/loss", self.save_test_loss)
+        test_summaries = [test_avg_perplexity_summ, test_avg_loss_summ]
+        self.test_summaries = tf.summary.merge(test_summaries, name="test_summaries")
 
     def _optimizer(self):
         self.global_step = tf.Variable(0, dtype=tf.int64, trainable=False, name="global_step")
