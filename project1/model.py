@@ -125,7 +125,7 @@ class Dataset:
         used_counter = 0
         for line in lines:
             split = line.strip().split(" ")
-            if len(split) < padding_size - 2:
+            if len(split) <= padding_size - 2:
                 parsed_line = np.full((padding_size), vocab[PAD_SYMBOL], dtype=np.int32)
 
                 split.insert(0, BOS_SYMBOL)
@@ -217,12 +217,16 @@ class NetworkUtils:
 
     @staticmethod
     def calc_perplexity(probs, indices):
+        def dynamic_mean(values, lens, axis=1):
+            return tf.reduce_sum(values, axis=1) / lens
         with tf.name_scope("perplexity"):
             print("probs", probs.get_shape())
             print("indices", indices.get_shape())
             epsilon = 1e-8
-            mask = indices != BASE_VOCAB[PAD_SYMBOL]
-            return tf.exp(-tf.reduce_mean(tf.log(tf.maximum(probs, epsilon)) * mask, axis=1))
+            mask = tf.cast(tf.not_equal(indices, BASE_VOCAB[PAD_SYMBOL]), tf.float32)
+            print("mask shape", mask.get_shape())
+            sentence_lens = tf.reduce_sum(mask, axis=1)
+            return tf.exp(-dynamic_mean(tf.log(tf.maximum(probs, epsilon)) * mask, lens=sentence_lens, axis=1))
 
 
 class Network:
@@ -431,7 +435,7 @@ class Network:
         sys.stdout.flush()  # Flush output, so that bpeek works.
         return np.array(sentence_perplexities)
 
-    def finish_sentence(self, sentence, zero_state, predict_len):
+    def finish_sentence(self, sentence, zero_states, predict_len):
         def create_feed_dict(word, state1, state2):
             return {self.man_word_index: word,
                     self.man_state1: state1,
@@ -442,25 +446,34 @@ class Network:
         result = []
 
         # Get initial state. Use dummy input to infer batch size.
-        state1, state2 = zero_state
+        state1, state2 = zero_states
         for word in sentence:
-            result.append(word)
+            print("w, lw", word, last_word)
             last_word, state1, state2 = self.session.run(fetches, feed_dict=create_feed_dict(word, state1, state2))
-
-        while last_word != EOS_SYMBOL and len(result) < predict_len:
+            print("2w, lw", word, last_word)
+            print("states", state1, state2)
+            result.append(word)
+        
+        assert last_word is not None
+        while len(result) < predict_len:
+            print("lw", last_word)
+            print("states", state1, state2)
             last_word, state1, state2 = self.session.run(fetches, feed_dict=create_feed_dict(last_word, state1, state2))
             result.append(last_word)
         return result
 
     def finish_sentences(self, dataset, sentences, predict_len):
-        init_state = self.session.run([self.zero_state1, self.zero_state2], feed_dict={
-            self.words_input: np.arange((1, SENTENCE_LEN))})
+        init_state1, init_state2 = self.session.run([self.zero_state1, self.zero_state2], feed_dict={
+            self.words_input: np.zeros((1, SENTENCE_LEN))})
         result = []
         for sentence in sentences:
             # Encode the sentence and trim the EOS symbol
-            sentence_len = len(sentence.rstrip().split(" "))
-            word_indices = Dataset.encode_words([sentence], dataset.vocab, sentence_len)[:-1]
-            out_indices = self.finish_sentence(word_indices, np.array(init_state, copy=True), predict_len)
+            sentence_len = len(sentence.strip().split(" "))
+            word_indices = Dataset.encode_words([sentence], dataset.vocab, padding_size=(sentence_len + 2))[0, :-1]
+            
+            init_state1_c = np.array(init_state1, copy=True, dtype=np.float32)
+            init_state2_c = np.array(init_state2, copy=True, dtype=np.float32)
+            out_indices = self.finish_sentence(word_indices, [init_state1_c, init_state2_c], predict_len)
             finished_sentence = [dataset.inv_vocab[word] for word in out_indices]
             result.append(finished_sentence)
         return result
