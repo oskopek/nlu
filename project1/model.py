@@ -343,9 +343,10 @@ class Network:
                     p = tf.gather_nd(probs, indices_to_gather)
                     # print("word_probs_p", p.get_shape())
                     next_word_probs.append(p)
+                    mask = tf.cast(tf.not_equal(next_word_index, BASE_VOCAB[PAD_SYMBOL]), tf.float32)
                     self.loss += tf.losses.compute_weighted_loss(
                         tf.nn.sparse_softmax_cross_entropy_with_logits(
-                            logits=x, labels=next_word_index, name="word_loss"))
+                            logits=x, labels=next_word_index, name="word_loss"), weights=mask)
 
             self.pred_indices = tf.stack(pred_indices, axis=1)
             print("pred_indices", self.pred_indices.get_shape())
