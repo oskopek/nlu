@@ -362,11 +362,13 @@ class Network:
 
     def _man(self):
         with tf.name_scope("man"):
-            self.man_word_index = tf.placeholder(tf.int32, (1), name="word_index")
+            self.man_word_index = tf.placeholder(tf.int32, (), name="word_index")
             word_emb = tf.nn.embedding_lookup(self.embedding_matrix,
                                               self.man_word_index,
                                               name="embedding_lookup")
+            word_emb = tf.expand_dims(word_emb, axis=0)
             print("word_emb", word_emb.get_shape())
+
             self.man_state1 = tf.placeholder(tf.float32, (1, self.lstm_dim), name="init_state_c")
             self.man_state2 = tf.placeholder(tf.float32, (1, self.lstm_dim), name="init_state_m")
             state = (self.man_state1, self.man_state2)
@@ -455,17 +457,14 @@ class Network:
         # Get initial state. Use dummy input to infer batch size.
         state1, state2 = zero_states
         for word in sentence:
-            print("w, lw", word, last_word)
             last_word, state1, state2 = self.session.run(fetches, feed_dict=create_feed_dict(word, state1, state2))
-            print("2w, lw", word, last_word)
-            print("states", state1, state2)
+            last_word = last_word[0]
             result.append(word)
-        
+
         assert last_word is not None
         while len(result) < predict_len:
-            print("lw", last_word)
-            print("states", state1, state2)
             last_word, state1, state2 = self.session.run(fetches, feed_dict=create_feed_dict(last_word, state1, state2))
+            last_word = last_word[0]
             result.append(last_word)
         return result
 
@@ -477,7 +476,7 @@ class Network:
             # Encode the sentence and trim the EOS symbol
             sentence_len = len(sentence.strip().split(" "))
             word_indices = Dataset.encode_words([sentence], dataset.vocab, padding_size=(sentence_len + 2))[0, :-1]
-            
+
             init_state1_c = np.array(init_state1, copy=True, dtype=np.float32)
             init_state2_c = np.array(init_state2, copy=True, dtype=np.float32)
             out_indices = self.finish_sentence(word_indices, [init_state1_c, init_state2_c], predict_len)
