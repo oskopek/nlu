@@ -362,7 +362,9 @@ class Network:
             print("mask shape", mask.get_shape())
             sentence_lens = tf.reduce_sum(mask, axis=1)
             self.loss /= sentence_lens
+            self.mean_loss = tf.reduce_mean(self.loss)
             print("loss", self.loss.get_shape(), self.loss.dtype)
+            print("mean_loss", self.mean_loss.get_shape(), self.mean_loss.dtype)
 
     def _man(self):
         with tf.name_scope("man"):
@@ -383,13 +385,13 @@ class Network:
 
     def _summaries(self):
         train_perplexity_summ = tf.summary.scalar("train/avg_perplexity", tf.reduce_mean(self.perplexity))
-        train_perplexity2_summ = tf.summary.scalar("train/avg_perplexity_xentropy", tf.exp(self.loss))
-        train_loss_summ = tf.summary.scalar("train/loss", self.loss)
+        train_perplexity2_summ = tf.summary.scalar("train/avg_perplexity_xentropy", tf.exp(self.mean_loss))
+        train_loss_summ = tf.summary.scalar("train/loss", self.mean_loss)
         # The text prediction summaries don't work with lower versions of TF:
         train_text_truth_summ = self.create_sentences("train/ground_truth", self.words_input[:, 1:])
         train_text_predict_summ = self.create_sentences("train/predicted", self.pred_indices)
 
-        train_summaries = [train_perplexity_summ, train_loss_summ, train_text_truth_summ, train_perplexity2_summ, train_text_predict_summ]
+        train_summaries = [train_perplexity_summ, train_perplexity2_summ, train_loss_summ, train_text_truth_summ, train_text_predict_summ]
         self.train_summaries = tf.summary.merge(train_summaries, name="train_summaries")
 
         self.save_test_perplexity = tf.placeholder(tf.float32, [], name="save_test_perplexity")
@@ -404,7 +406,7 @@ class Network:
         with tf.name_scope("optimizer"):
             optimizer = tf.train.AdamOptimizer()
             with tf.name_scope("clip"):
-                gradients = optimizer.compute_gradients(self.loss)
+                gradients = optimizer.compute_gradients(self.mean_loss)
                 clipped_gradients = [(tf.clip_by_norm(gradient, GRAD_CLIP), var) for gradient, var in gradients]
             self.trainer = optimizer.apply_gradients(clipped_gradients, global_step=self.global_step)
 
@@ -415,7 +417,7 @@ class Network:
             self.saver = tf.train.Saver()
 
     def run_batch(self, inputs, train, monitor):
-        targets = [self.global_step, self.loss]
+        targets = [self.global_step, self.mean_loss]
         if monitor:
             targets.append(self.perplexity)
             if train:
