@@ -58,11 +58,16 @@ def load_embedding(session, vocab, emb, path, dim_embedding, vocab_size):
     matches = 0
 
     for tok, idx in vocab.items():
+        tok_augmented = tok[1:-1]
         if tok in model.vocab:
             external_embedding[idx] = model[tok]
             matches += 1
+        elif tok_augmented in model.vocab:
+            print("Using embedding of '{}' for '{}'".format(tok_augmented, tok))
+            external_embedding[idx] = model[tok_augmented]
+            matches += 1
         else:
-            print("%s not in embedding file" % tok)
+            print("%s not in embedding file, initializing randomly" % tok)
             external_embedding[idx] = np.random.uniform(
                 low=-0.25, high=0.25, size=dim_embedding)
 
@@ -218,7 +223,7 @@ class NetworkUtils:
     @staticmethod
     def calc_perplexity(probs, indices):
         def dynamic_mean(values, lens, axis=1):
-            return tf.reduce_sum(values, axis=1) / lens
+            return tf.reduce_sum(values, axis=axis) / lens
         with tf.name_scope("perplexity"):
             print("probs", probs.get_shape())
             print("indices", indices.get_shape())
