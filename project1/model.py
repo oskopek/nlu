@@ -330,7 +330,7 @@ class Network:
                 state = (tf.zeros(state_shape, name="zero_state_c"),
                          tf.zeros(state_shape, name="zero_state_m"))
             self.zero_state1, self.zero_state2 = state
-            self.loss = 0
+            self.loss = tf.zeros(batch_size)
 
             # RNN for loop
             next_word_probs = []
@@ -349,15 +349,19 @@ class Network:
                     # print("word_probs_p", p.get_shape())
                     next_word_probs.append(p)
                     mask = tf.cast(tf.not_equal(next_word_index, BASE_VOCAB[PAD_SYMBOL]), tf.float32)
-                    self.loss += tf.losses.compute_weighted_loss(
-                        tf.nn.sparse_softmax_cross_entropy_with_logits(
-                            logits=x, labels=next_word_index, name="word_loss"), weights=mask)
+                    self.loss += tf.nn.sparse_softmax_cross_entropy_with_logits(logits=x, labels=next_word_index, name="word_loss") * mask
 
             self.pred_indices = tf.stack(pred_indices, axis=1)
             print("pred_indices", self.pred_indices.get_shape())
             next_word_probs = tf.stack(next_word_probs, axis=1)
             print("stacked_probs", next_word_probs.get_shape())
-            self.perplexity = NetworkUtils.calc_perplexity(next_word_probs, self.words_input[:, 1:])
+            indices = self.words_input[:, 1:]
+            self.perplexity = NetworkUtils.calc_perplexity(next_word_probs, indices)
+
+            mask = tf.cast(tf.not_equal(indices, BASE_VOCAB[PAD_SYMBOL]), tf.float32)
+            print("mask shape", mask.get_shape())
+            sentence_lens = tf.reduce_sum(mask, axis=1)
+            self.loss /= sentence_lens
             print("loss", self.loss.get_shape(), self.loss.dtype)
 
     def _man(self):
@@ -372,7 +376,7 @@ class Network:
             self.man_state1 = tf.placeholder(tf.float32, (1, self.lstm_dim), name="init_state_c")
             self.man_state2 = tf.placeholder(tf.float32, (1, self.lstm_dim), name="init_state_m")
             state = (self.man_state1, self.man_state2)
-            x, self.man_out_state = self.rnn_cell(word_emb, state)
+            x, state = self.rnn_cell(word_emb, state)
             x = self.output_layer(x, reuse=True)
             self.man_out_word_index = tf.argmax(x, axis=1)
             self.man_out_state1, self.man_out_state2 = state
@@ -456,13 +460,14 @@ class Network:
 
         # Get initial state. Use dummy input to infer batch size.
         state1, state2 = zero_states
+        assert len(sentence) <= 20
         for word in sentence:
             last_word, state1, state2 = self.session.run(fetches, feed_dict=create_feed_dict(word, state1, state2))
             last_word = last_word[0]
             result.append(word)
 
         assert last_word is not None
-        while len(result) < predict_len:
+        while len(result) < predict_len and last_word != BASE_VOCAB[EOS_SYMBOL]:
             last_word, state1, state2 = self.session.run(fetches, feed_dict=create_feed_dict(last_word, state1, state2))
             last_word = last_word[0]
             result.append(last_word)
@@ -472,7 +477,7 @@ class Network:
         init_state1, init_state2 = self.session.run([self.zero_state1, self.zero_state2], feed_dict={
             self.words_input: np.zeros((1, SENTENCE_LEN))})
         result = []
-        for sentence in sentences:
+        for i, sentence in enumerate(sentences):
             # Encode the sentence and trim the EOS symbol
             sentence_len = len(sentence.strip().split(" "))
             word_indices = Dataset.encode_words([sentence], dataset.vocab, padding_size=(sentence_len + 2))[0, :-1]
@@ -482,6 +487,8 @@ class Network:
             out_indices = self.finish_sentence(word_indices, [init_state1_c, init_state2_c], predict_len)
             finished_sentence = [dataset.inv_vocab[word] for word in out_indices]
             result.append(finished_sentence)
+            if i % 500 == 0:
+                print(i, "out of", len(sentences), "done:", finished_sentence)
         return result
 
     def run(self, dataset, batch_size, epochs):
