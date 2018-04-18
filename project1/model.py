@@ -460,7 +460,7 @@ class Network:
             batch_losses.append(batch_loss)
             sentence_perplexities.extend(batch_perplexities)
         loss, perplexity = np.mean(batch_losses), np.mean(sentence_perplexities)
-        print("Batches", step, "finished. Loss:", loss, "Perplexity:", perplexity)
+        print("Loss:", loss, "Perplexity:", perplexity)
         sys.stdout.flush()  # Flush output, so that bpeek works.
         return np.array(sentence_perplexities)
 
