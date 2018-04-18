@@ -545,7 +545,7 @@ def expD(checkpoint_path):
     sentences = network.finish_sentences(dataset=dset, sentences=dset.continuation_lines, predict_len=PREDICT_LEN)
     with open(os.path.join(SAVE_DIR, "{}_gen.txt".format(os.path.basename(checkpoint_path))), "w+") as f:
         for s in sentences:
-            print(s, file=f)
+            print(" ".join(s), file=f)
 
 
 def main(args):
