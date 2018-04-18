@@ -487,7 +487,7 @@ class Network:
             last_word, state1, state2 = self.session.run(fetches, feed_dict=create_feed_dict(last_word, state1, state2))
             last_word = last_word[0]
             result.append(last_word)
-        return result
+        return result[1:] # remove <bos>
 
     def finish_sentences(self, dataset, sentences, predict_len):
         init_state1, init_state2 = self.session.run([self.zero_state1, self.zero_state2], feed_dict={
