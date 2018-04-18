@@ -16,6 +16,7 @@ DATA_FOLDER = "data"
 CONTINUATION = os.path.join(DATA_FOLDER, "sentences.continuation")
 EVAL = os.path.join(DATA_FOLDER, "sentences.eval")
 TRAIN = os.path.join(DATA_FOLDER, "sentences.train")
+TEST = os.path.join(DATA_FOLDER, "sentences.test")
 EMBEDDINGS = os.path.join(DATA_FOLDER, "pretrained_embeddings")
 
 LOG_DIR = os.path.join(ROOT, "logs")
@@ -97,6 +98,7 @@ class Dataset:
     train_data = None
     eval_data = None
     continuation_data = None
+    test_data = None
     embedding_file = None
     vocab = None
     inv_vocab = None
@@ -145,10 +147,11 @@ class Dataset:
         data = data[:used_counter, :]
         return data
 
-    def __init__(self, train_file, eval_file, continuation_file, embedding_file):
+    def __init__(self, train_file, eval_file, continuation_file, test_file, embedding_file):
         # Reading training has to happen first!
         self.train_data = self.read_data(train_file)
         self.eval_data = self.read_data(eval_file)
+        self.test_data = self.read_data(test_file)
 
         # Only read continuations into lines, because we do not pad them.
         self.continuation_lines = Dataset.read_lines(continuation_file)
@@ -450,6 +453,17 @@ class Network:
         sys.stdout.flush()  # Flush output, so that bpeek works.
         return np.array(sentence_perplexities)
 
+    def test(self, dataset, batch_size):
+        batch_losses, sentence_perplexities = [], []
+        for batch in dataset.batches_per_epoch_generator(batch_size, data=dataset.test_data, shuffle=False):
+            batch_loss, batch_perplexities = self.run_batch(batch, train=False, monitor=True)
+            batch_losses.append(batch_loss)
+            sentence_perplexities.extend(batch_perplexities)
+        loss, perplexity = np.mean(batch_losses), np.mean(sentence_perplexities)
+        print("Batches", step, "finished. Loss:", loss, "Perplexity:", perplexity)
+        sys.stdout.flush()  # Flush output, so that bpeek works.
+        return np.array(sentence_perplexities)
+
     def finish_sentence(self, sentence, zero_states, predict_len):
         def create_feed_dict(word, state1, state2):
             return {self.man_word_index: word,
@@ -514,26 +528,28 @@ def gen_expname(expname):
     return "{}-{}".format(datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S"), expname)
 
 
-def expA():
+def expA(checkpoint_path):
     expname = gen_expname("LSTM512-RNN")
-    network = Network(dset, lstm_dim=512, embedding_dim=100, load_embeddings=False,
-                      log_dir=os.path.join(LOG_DIR, expname),
-                      save_path=os.path.join(SAVE_DIR, expname))
-    return network
+    return Network(dset, lstm_dim=512, embedding_dim=100, load_embeddings=False,
+                   log_dir=os.path.join(LOG_DIR, expname),
+                   save_path=os.path.join(SAVE_DIR, expname),
+                   restore_from=checkpoint_path)
 
 
-def expB():
+def expB(checkpoint_path):
     expname = gen_expname("LSTM512-RNN-w2v-emb")
     return Network(dset, lstm_dim=512, embedding_dim=100, load_embeddings=True,
                    log_dir=os.path.join(LOG_DIR, expname),
-                   save_path=os.path.join(SAVE_DIR, expname))
+                   save_path=os.path.join(SAVE_DIR, expname),
+                   restore_from=checkpoint_path)
 
 
-def expC():
+def expC(checkpoint_path):
     expname = gen_expname("LSTM1024-RNN-w2v-emb")
     return Network(dset, lstm_dim=1024, embedding_dim=100, load_embeddings=True,
                    log_dir=os.path.join(LOG_DIR, expname),
-                   save_path=os.path.join(SAVE_DIR, expname))
+                   save_path=os.path.join(SAVE_DIR, expname),
+                   restore_from=checkpoint_path)
 
 
 def expD(checkpoint_path):
@@ -551,8 +567,8 @@ def expD(checkpoint_path):
 def main(args):
     print("Loading data...")
     global dset
-    dset = Dataset(TRAIN, EVAL, CONTINUATION, EMBEDDINGS)
-    print("Data shapes:", dset.train_data.shape, dset.eval_data.shape, len(dset.continuation_lines))
+    dset = Dataset(TRAIN, EVAL, CONTINUATION, TEST, EMBEDDINGS)
+    print("Data shapes:", dset.train_data.shape, dset.eval_data.shape, len(dset.continuation_lines), dset.test_data.shape)
     print("Vocabulary size:", len(dset.vocab))
 
     print("Initializing network...")
@@ -560,11 +576,11 @@ def main(args):
 
     network = None
     if experiment == "a":
-        network = expA()
+        network = expA(args.checkpoint_path)
     elif experiment == "b":
-        network = expB()
+        network = expB(args.checkpoint_path)
     elif experiment == "c":
-        network = expC()
+        network = expC(args.checkpoint_path)
     elif experiment == "d":
         expD(args.checkpoint_path)
         return
@@ -574,8 +590,16 @@ def main(args):
     EPOCHS = args.epochs
     BATCH_SIZE = args.batch_size
 
-    print("Running network...")
-    network.run(dset, BATCH_SIZE, EPOCHS)
+    if args.checkpoint_path is None:
+        print("Running network...")
+        network.run(dset, BATCH_SIZE, EPOCHS)
+    else:
+        print("Testing...")
+        perplexities = network.test(dset, BATCH_SIZE)
+        perplexity_fname = os.path.join(SAVE_DIR, "{}_exp{}_test.txt".format(os.path.basename(args.checkpoint_path), args.exp))
+        with open(perplexity_fname, "w+") as f:
+            for p in perplexities:
+                print(p, file=f)
 
 
 if __name__ == "__main__":
@@ -586,6 +610,6 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", default=BATCH_SIZE, type=int, help="Batch size.")
     parser.add_argument("--epochs", default=10, type=int, help="Number of epochs.")
     parser.add_argument("--exp", default="a", help="Experiment to run.")
-    parser.add_argument("--checkpoint_path", default="", help="Full checkpoint path.")
+    parser.add_argument("--checkpoint_path", default=None, help="Full checkpoint path.")
     args = parser.parse_args()
     main(args)
