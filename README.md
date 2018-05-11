@@ -1,3 +1,3 @@
-= NLU Project Repo
+# NLU Project Repo
 
 Team 6
