@@ -1,6 +1,6 @@
-import datetime
-
 from collections import OrderedDict
+import datetime
+import os
 
 import tensorflow as tf
 import tqdm
@@ -32,16 +32,15 @@ class Model:
 
             self.predictions, self.loss, self.training_step = self.build_model()
 
-            timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")
-
             current_accuracy, update_accuracy = tf.metrics.accuracy(self.labels, self.predictions)
             current_loss, update_loss = tf.metrics.mean(self.loss)
             self.reset_metrics = tf.variables_initializer(tf.get_collection(tf.GraphKeys.METRIC_VARIABLES))
             self.current_metrics = [current_accuracy, current_loss]
             self.update_metrics = [update_accuracy, update_loss]
 
-            summary_writer = tf.contrib.summary.create_file_writer(
-                    "{}/{}-{}".format(logdir, timestamp, expname), flush_millis=5_000)
+            timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")
+            self.save_dir = os.path.join(f"{logdir}", f"{timestamp}-{expname}")
+            summary_writer = tf.contrib.summary.create_file_writer(self.save_dir, flush_millis=5_000)
             self.summaries = {}
             with summary_writer.as_default(), tf.contrib.summary.record_summaries_every_n_global_steps(10):
                 self.summaries["train"] = [
