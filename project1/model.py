@@ -7,9 +7,7 @@ from gensim import models
 import numpy as np
 import tensorflow as tf
 
-
 ######################### CONSTANTS #####################################
-
 
 ROOT = "."
 DATA_FOLDER = "data"
@@ -36,7 +34,6 @@ EOS_SYMBOL = "<eos>"
 PAD_SYMBOL = "<pad>"
 UNK_SYMBOL = "<unk>"
 BASE_VOCAB = {UNK_SYMBOL: 0, BOS_SYMBOL: 1, EOS_SYMBOL: 2, PAD_SYMBOL: 3}
-
 
 ######################### EMBEDDINGS #####################################
 
@@ -69,8 +66,7 @@ def load_embedding(session, vocab, emb, path, dim_embedding, vocab_size):
             matches += 1
         else:
             print("%s not in embedding file, initializing randomly" % tok)
-            external_embedding[idx] = np.random.uniform(
-                low=-0.25, high=0.25, size=dim_embedding)
+            external_embedding[idx] = np.random.uniform(low=-0.25, high=0.25, size=dim_embedding)
 
     print("%d words out of %d could be loaded" % (matches, vocab_size))
 
@@ -169,12 +165,7 @@ class Dataset:
 
     def load_embeddings(self, session, emb_matrix, dim_embedding):
         assert VOCABULARY_LEN == len(self.vocab)
-        load_embedding(session,
-                       self.vocab,
-                       emb_matrix,
-                       self.embedding_file,
-                       dim_embedding,
-                       len(self.vocab))
+        load_embedding(session, self.vocab, emb_matrix, self.embedding_file, dim_embedding, len(self.vocab))
 
     def batches_per_epoch_generator(self, batch_size, data=None, shuffle=True):
         if data is None:
@@ -187,7 +178,7 @@ class Dataset:
             train_permutation = np.arange(n_rows)
 
         for i in range(0, n_rows, batch_size):
-            yield data[train_permutation[i: i + batch_size]]
+            yield data[train_permutation[i:i + batch_size]]
 
 
 ######################### NETWORK #####################################
@@ -198,14 +189,8 @@ class NetworkUtils:
     @staticmethod
     def trainable_zero_state(batch_size, lstm_dim, reuse=False):
         with tf.variable_scope("rnn_zero_state", reuse=reuse):
-            state1 = tf.get_variable(
-                name="intial_state_c",
-                shape=[lstm_dim],
-                dtype=tf.float32)
-            state2 = tf.get_variable(
-                name="intial_state_m",
-                shape=[lstm_dim],
-                dtype=tf.float32)
+            state1 = tf.get_variable(name="intial_state_c", shape=[lstm_dim], dtype=tf.float32)
+            state2 = tf.get_variable(name="intial_state_m", shape=[lstm_dim], dtype=tf.float32)
             state1 = tf.reshape(tf.tile(state1, [batch_size]), (-1, lstm_dim))
             state2 = tf.reshape(tf.tile(state2, [batch_size]), (-1, lstm_dim))
             print("state_real", state1.get_shape())
@@ -213,9 +198,11 @@ class NetworkUtils:
 
     @staticmethod
     def tee(x):
+
         def print_fnc(x):
             print(x)
             return np.zeros(shape=1, dtype=np.float32)
+
         return x + tf.py_func(print_fnc, [x], tf.float32)
 
     @staticmethod
@@ -225,8 +212,10 @@ class NetworkUtils:
 
     @staticmethod
     def calc_perplexity(probs, indices):
+
         def dynamic_mean(values, lens, axis=1):
             return tf.reduce_sum(values, axis=axis) / lens
+
         with tf.name_scope("perplexity"):
             print("probs", probs.get_shape())
             print("indices", indices.get_shape())
@@ -265,6 +254,7 @@ class Network:
             return NetworkUtils.dense_layer(x, VOCABULARY_LEN, name="softmax_layer")
 
     def create_sentences(self, name, indices):
+
         def lookup(indices):
             # print("pyfunc_input", indices.shape)
             result = []
@@ -279,11 +269,19 @@ class Network:
                 result.append(" ".join(batch_unpadded))
             result = ["{}. \x60{}\x60".format(i, r) for i, r in enumerate(result)]
             return "\n".join(result)
+
         sentences = tf.py_func(lookup, [indices], tf.string)
         return tf.summary.text(name, sentences)
 
-    def __init__(self, dataset, log_dir=None, save_path=None, embedding_dim=EMBEDDING_DIM,
-                 lstm_dim=LSTM_DIM, load_embeddings=False, train_init_state=True, restore_from=None):
+    def __init__(self,
+                 dataset,
+                 log_dir=None,
+                 save_path=None,
+                 embedding_dim=EMBEDDING_DIM,
+                 lstm_dim=LSTM_DIM,
+                 load_embeddings=False,
+                 train_init_state=True,
+                 restore_from=None):
         graph = tf.Graph()
         graph.seed = SEED
         self.dataset = dataset
@@ -309,20 +307,17 @@ class Network:
     def _embeddings(self, load_embeddings, embedding_dim):
         with tf.name_scope("embeddings"):
             self.embedding_matrix = tf.get_variable(
-                name="embedding_matrix", shape=[
-                    VOCABULARY_LEN, embedding_dim], dtype=tf.float32)
+                    name="embedding_matrix", shape=[VOCABULARY_LEN, embedding_dim], dtype=tf.float32)
             if load_embeddings:
                 self.dataset.load_embeddings(self.session, self.embedding_matrix, embedding_dim)
             self.word_embeddings = tf.nn.embedding_lookup(
-                self.embedding_matrix, self.words_input, name="embedding_lookup")
+                    self.embedding_matrix, self.words_input, name="embedding_lookup")
             print("word_embeddings", self.word_embeddings.get_shape())
 
     def _rnn(self, train_init_state):
         with tf.name_scope("rnn"):
             self.rnn_cell = tf.nn.rnn_cell.LSTMCell(
-                num_units=self.lstm_dim,
-                initializer=self.initializer(),
-                state_is_tuple=True)
+                    num_units=self.lstm_dim, initializer=self.initializer(), state_is_tuple=True)
 
             # Zeros state for RNN.
             batch_size = tf.shape(self.words_input)[0]
@@ -330,8 +325,7 @@ class Network:
             if train_init_state:
                 state = NetworkUtils.trainable_zero_state(batch_size, self.lstm_dim)
             else:
-                state = (tf.zeros(state_shape, name="zero_state_c"),
-                         tf.zeros(state_shape, name="zero_state_m"))
+                state = (tf.zeros(state_shape, name="zero_state_c"), tf.zeros(state_shape, name="zero_state_m"))
             self.zero_state1, self.zero_state2 = state
             self.loss = tf.zeros(batch_size)
 
@@ -352,7 +346,8 @@ class Network:
                     # print("word_probs_p", p.get_shape())
                     next_word_probs.append(p)
                     mask = tf.cast(tf.not_equal(next_word_index, BASE_VOCAB[PAD_SYMBOL]), tf.float32)
-                    self.loss += tf.nn.sparse_softmax_cross_entropy_with_logits(logits=x, labels=next_word_index, name="word_loss") * mask
+                    self.loss += tf.nn.sparse_softmax_cross_entropy_with_logits(
+                            logits=x, labels=next_word_index, name="word_loss") * mask
 
             self.pred_indices = tf.stack(pred_indices, axis=1)
             print("pred_indices", self.pred_indices.get_shape())
@@ -372,9 +367,7 @@ class Network:
     def _man(self):
         with tf.name_scope("man"):
             self.man_word_index = tf.placeholder(tf.int32, (), name="word_index")
-            word_emb = tf.nn.embedding_lookup(self.embedding_matrix,
-                                              self.man_word_index,
-                                              name="embedding_lookup")
+            word_emb = tf.nn.embedding_lookup(self.embedding_matrix, self.man_word_index, name="embedding_lookup")
             word_emb = tf.expand_dims(word_emb, axis=0)
             print("word_emb", word_emb.get_shape())
 
@@ -394,7 +387,10 @@ class Network:
         train_text_truth_summ = self.create_sentences("train/ground_truth", self.words_input[:, 1:])
         train_text_predict_summ = self.create_sentences("train/predicted", self.pred_indices)
 
-        train_summaries = [train_perplexity_summ, train_perplexity2_summ, train_loss_summ, train_text_truth_summ, train_text_predict_summ]
+        train_summaries = [
+                train_perplexity_summ, train_perplexity2_summ, train_loss_summ, train_text_truth_summ,
+                train_text_predict_summ
+        ]
         self.train_summaries = tf.summary.merge(train_summaries, name="train_summaries")
 
         self.save_test_perplexity = tf.placeholder(tf.float32, [], name="save_test_perplexity")
@@ -445,9 +441,12 @@ class Network:
             sentence_perplexities.extend(batch_perplexities)
         loss, perplexity = np.mean(batch_losses), np.mean(sentence_perplexities)
         # Save the results in Tensorboard
-        step, summs = self.session.run([self.global_step, self.test_summaries],
-                                       feed_dict={self.save_test_perplexity: perplexity,
-                                                  self.save_test_loss: loss})
+        step, summs = self.session.run(
+                [self.global_step, self.test_summaries],
+                feed_dict={
+                        self.save_test_perplexity: perplexity,
+                        self.save_test_loss: loss
+                })
         self.summary_writer.add_summary(summs, global_step=step)
         print("Batches", step, "finished. Loss:", loss, "Perplexity:", perplexity)
         sys.stdout.flush()  # Flush output, so that bpeek works.
@@ -465,10 +464,9 @@ class Network:
         return np.array(sentence_perplexities)
 
     def finish_sentence(self, sentence, zero_states, predict_len):
+
         def create_feed_dict(word, state1, state2):
-            return {self.man_word_index: word,
-                    self.man_state1: state1,
-                    self.man_state2: state2}
+            return {self.man_word_index: word, self.man_state1: state1, self.man_state2: state2}
 
         last_word = None
         fetches = [self.man_out_word_index, self.man_out_state1, self.man_out_state2]
@@ -487,11 +485,11 @@ class Network:
             last_word, state1, state2 = self.session.run(fetches, feed_dict=create_feed_dict(last_word, state1, state2))
             last_word = last_word[0]
             result.append(last_word)
-        return result[1:] # remove <bos>
+        return result[1:]  # remove <bos>
 
     def finish_sentences(self, dataset, sentences, predict_len):
-        init_state1, init_state2 = self.session.run([self.zero_state1, self.zero_state2], feed_dict={
-            self.words_input: np.zeros((1, SENTENCE_LEN))})
+        init_state1, init_state2 = self.session.run(
+                [self.zero_state1, self.zero_state2], feed_dict={self.words_input: np.zeros((1, SENTENCE_LEN))})
         result = []
         for i, sentence in enumerate(sentences):
             # Encode the sentence and trim the EOS symbol
@@ -530,34 +528,50 @@ def gen_expname(expname):
 
 def expA(checkpoint_path):
     expname = gen_expname("LSTM512-RNN")
-    return Network(dset, lstm_dim=512, embedding_dim=100, load_embeddings=False,
-                   log_dir=os.path.join(LOG_DIR, expname),
-                   save_path=os.path.join(SAVE_DIR, expname),
-                   restore_from=checkpoint_path)
+    return Network(
+            dset,
+            lstm_dim=512,
+            embedding_dim=100,
+            load_embeddings=False,
+            log_dir=os.path.join(LOG_DIR, expname),
+            save_path=os.path.join(SAVE_DIR, expname),
+            restore_from=checkpoint_path)
 
 
 def expB(checkpoint_path):
     expname = gen_expname("LSTM512-RNN-w2v-emb")
-    return Network(dset, lstm_dim=512, embedding_dim=100, load_embeddings=True,
-                   log_dir=os.path.join(LOG_DIR, expname),
-                   save_path=os.path.join(SAVE_DIR, expname),
-                   restore_from=checkpoint_path)
+    return Network(
+            dset,
+            lstm_dim=512,
+            embedding_dim=100,
+            load_embeddings=True,
+            log_dir=os.path.join(LOG_DIR, expname),
+            save_path=os.path.join(SAVE_DIR, expname),
+            restore_from=checkpoint_path)
 
 
 def expC(checkpoint_path):
     expname = gen_expname("LSTM1024-RNN-w2v-emb")
-    return Network(dset, lstm_dim=1024, embedding_dim=100, load_embeddings=True,
-                   log_dir=os.path.join(LOG_DIR, expname),
-                   save_path=os.path.join(SAVE_DIR, expname),
-                   restore_from=checkpoint_path)
+    return Network(
+            dset,
+            lstm_dim=1024,
+            embedding_dim=100,
+            load_embeddings=True,
+            log_dir=os.path.join(LOG_DIR, expname),
+            save_path=os.path.join(SAVE_DIR, expname),
+            restore_from=checkpoint_path)
 
 
 def expD(checkpoint_path):
     expname = gen_expname("LSTM1024-RNN-w2v-emb-generate")
-    network = Network(dset, lstm_dim=1024, embedding_dim=100, load_embeddings=False,
-                      log_dir=os.path.join(LOG_DIR, expname),
-                      save_path=os.path.join(SAVE_DIR, expname),
-                      restore_from=checkpoint_path)
+    network = Network(
+            dset,
+            lstm_dim=1024,
+            embedding_dim=100,
+            load_embeddings=False,
+            log_dir=os.path.join(LOG_DIR, expname),
+            save_path=os.path.join(SAVE_DIR, expname),
+            restore_from=checkpoint_path)
     sentences = network.finish_sentences(dataset=dset, sentences=dset.continuation_lines, predict_len=PREDICT_LEN)
     with open(os.path.join(SAVE_DIR, "{}_gen.txt".format(os.path.basename(checkpoint_path))), "w+") as f:
         for s in sentences:
@@ -568,7 +582,8 @@ def main(args):
     print("Loading data...")
     global dset
     dset = Dataset(TRAIN, EVAL, CONTINUATION, TEST, EMBEDDINGS)
-    print("Data shapes:", dset.train_data.shape, dset.eval_data.shape, len(dset.continuation_lines), dset.test_data.shape)
+    print("Data shapes:", dset.train_data.shape, dset.eval_data.shape, len(dset.continuation_lines),
+          dset.test_data.shape)
     print("Vocabulary size:", len(dset.vocab))
 
     print("Initializing network...")
@@ -596,7 +611,8 @@ def main(args):
     else:
         print("Testing...")
         perplexities = network.test(dset, BATCH_SIZE)
-        perplexity_fname = os.path.join(SAVE_DIR, "{}_exp{}_test.txt".format(os.path.basename(args.checkpoint_path), args.exp))
+        perplexity_fname = os.path.join(SAVE_DIR, "{}_exp{}_test.txt".format(
+                os.path.basename(args.checkpoint_path), args.exp))
         with open(perplexity_fname, "w+") as f:
             for p in perplexities:
                 print(p, file=f)
