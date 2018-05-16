@@ -1,0 +1,20 @@
+[flake8]
+doctests = True
+enable-extensions = docstrings
+max-line-length = 120
+statistics = True
+show-source = True
+exclude =
+    .svn,
+    CVS,
+    .bzr,
+    .hg,
+    .git,
+    __pycache__,
+    .tox,
+    .eggs,
+    *.egg,
+    .ipynb_checkpoints,
+    venv,
+    outputs,
+    datasets
