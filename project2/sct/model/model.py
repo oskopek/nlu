@@ -1,5 +1,5 @@
 from collections import OrderedDict
-import datetime
+from datetime import datetime
 import os
 
 import tensorflow as tf
@@ -7,8 +7,55 @@ import tqdm
 
 
 class Model:
+    SENTENCES = 4
+    ENDINGS = 2
+
+    def _placeholders(self):
+        self.global_step = tf.Variable(0, dtype=tf.int64, trainable=False, name="global_step")
+
+        self.sentence_lens = tf.placeholder(tf.int32, [None, self.SENTENCES], name="sentence_lens")
+        self.ending_lens = tf.placeholder(tf.int32, [None, self.ENDINGS], name="ending_lens")
+
+        self.sentence_word_ids = tf.placeholder(tf.int32, [None, self.SENTENCES, None], name="sentence_word_ids")
+        self.ending_word_ids = tf.placeholder(tf.int32, [None, self.ENDINGS, None], name="ending_word_ids")
+
+        self.sentence_charseq_ids = tf.placeholder(tf.int32, [None, self.SENTENCES, None], name="sentence_charseq_ids")
+        self.ending_charseq_ids = tf.placeholder(tf.int32, [None, self.ENDINGS, None], name="ending_charseq_ids")
+
+        self.charseqs = tf.placeholder(tf.int32, [None, None], name="charseqs")
+        self.charseq_lens = tf.placeholder(tf.int32, [None], name="charseq_lens")
+        self.labels = tf.placeholder(tf.int32, [None], name="labels")
+        self.is_training = tf.placeholder_with_default(False, [], name="is_training")
+
+    def _summaries_and_init(self):
+        current_accuracy, update_accuracy = tf.metrics.accuracy(self.labels, self.predictions)
+        current_loss, update_loss = tf.metrics.mean(self.loss)
+        self.reset_metrics = tf.variables_initializer(tf.get_collection(tf.GraphKeys.METRIC_VARIABLES))
+        self.current_metrics = [current_accuracy, current_loss]
+        self.update_metrics = [update_accuracy, update_loss]
+
+        summary_writer = tf.contrib.summary.create_file_writer(self.save_dir, flush_millis=5_000)
+        self.summaries = {}
+        with summary_writer.as_default(), tf.contrib.summary.record_summaries_every_n_global_steps(10):
+            self.summaries["train"] = [
+                    tf.contrib.summary.scalar("train/loss", update_loss),
+                    tf.contrib.summary.scalar("train/accuracy", update_accuracy)
+            ]
+        with summary_writer.as_default(), tf.contrib.summary.always_record_summaries():
+            for dataset in ["eval", "test"]:
+                self.summaries[dataset] = [
+                        tf.contrib.summary.scalar(dataset + "/loss", current_loss),
+                        tf.contrib.summary.scalar(dataset + "/accuracy", current_accuracy)
+                ]
+
+        # Initialize variables
+        self.session.run(tf.initialize_all_variables())
+        with summary_writer.as_default():
+            tf.contrib.summary.initialize(session=self.session, graph=self.session.graph)
 
     def __init__(self, *args, threads=1, seed=42, logdir="logs", expname="exp", **kwargs):
+        self.save_dir = os.path.join(f"{logdir}", f"{datetime.now().strftime('%Y-%m-%d_%H%M%S')}-{expname}")
+
         # Create an empty graph and a session
         graph = tf.Graph()
         graph.seed = seed
@@ -21,43 +68,9 @@ class Model:
 
         # Construct the graph
         with self.session.graph.as_default():
-            self.global_step = tf.Variable(0, dtype=tf.int64, trainable=False, name="global_step")
-            self.sentence_lens = tf.placeholder(tf.int32, [None], name="sentence_lens")
-            self.word_ids = tf.placeholder(tf.int32, [None, None], name="word_ids")
-            self.charseq_ids = tf.placeholder(tf.int32, [None, None], name="charseq_ids")
-            self.charseqs = tf.placeholder(tf.int32, [None, None], name="charseqs")
-            self.charseq_lens = tf.placeholder(tf.int32, [None], name="charseq_lens")
-            self.labels = tf.placeholder(tf.int32, [None], name="labels")
-            self.is_training = tf.placeholder_with_default(False, [], name="is_training")
-
+            self._placeholders()
             self.predictions, self.loss, self.training_step = self.build_model()
-
-            current_accuracy, update_accuracy = tf.metrics.accuracy(self.labels, self.predictions)
-            current_loss, update_loss = tf.metrics.mean(self.loss)
-            self.reset_metrics = tf.variables_initializer(tf.get_collection(tf.GraphKeys.METRIC_VARIABLES))
-            self.current_metrics = [current_accuracy, current_loss]
-            self.update_metrics = [update_accuracy, update_loss]
-
-            timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")
-            self.save_dir = os.path.join(f"{logdir}", f"{timestamp}-{expname}")
-            summary_writer = tf.contrib.summary.create_file_writer(self.save_dir, flush_millis=5_000)
-            self.summaries = {}
-            with summary_writer.as_default(), tf.contrib.summary.record_summaries_every_n_global_steps(10):
-                self.summaries["train"] = [
-                        tf.contrib.summary.scalar("train/loss", update_loss),
-                        tf.contrib.summary.scalar("train/accuracy", update_accuracy)
-                ]
-            with summary_writer.as_default(), tf.contrib.summary.always_record_summaries():
-                for dataset in ["eval", "test"]:
-                    self.summaries[dataset] = [
-                            tf.contrib.summary.scalar(dataset + "/loss", current_loss),
-                            tf.contrib.summary.scalar(dataset + "/accuracy", current_accuracy),
-                    ]
-
-            # Initialize variables
-            self.session.run(tf.initialize_all_variables())
-            with summary_writer.as_default():
-                tf.contrib.summary.initialize(session=self.session, graph=self.session.graph)
+            self._summaries_and_init()
 
     def build_model(self):
         """
@@ -68,11 +81,15 @@ class Model:
         raise NotImplementedError("To be overridden.")
 
     def _build_feed_dict(self, batch, is_training=False):
-        sentence_lens, word_ids, charseq_ids, charseqs, charseq_lens, labels = batch
+        (sentence_lens, ending_lens), (sentence_word_ids, ending_word_ids), (sentence_charseq_ids, ending_charseq_ids),\
+            charseqs, charseq_lens, labels = batch
         return {
                 self.sentence_lens: sentence_lens,
-                self.word_ids: word_ids,
-                self.charseq_ids: charseq_ids,
+                self.ending_lens: ending_lens,
+                self.sentence_word_ids: sentence_word_ids,
+                self.ending_word_ids: ending_word_ids,
+                self.sentence_charseq_ids: sentence_charseq_ids,
+                self.ending_charseq_ids: ending_charseq_ids,
                 self.charseqs: charseqs,
                 self.charseq_lens: charseq_lens,
                 self.labels: labels,

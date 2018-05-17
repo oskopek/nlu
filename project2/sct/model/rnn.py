@@ -55,39 +55,76 @@ class RNN(Model):
         input_chars = tf.concat([state_fw, state_bw], axis=1)
         print("input_chars_rnn", input_chars.get_shape())
 
-        input_char_words = tf.nn.embedding_lookup(input_chars, self.charseq_ids)
+        charseq_ids = tf.concat([self.sentence_charseq_ids, self.ending_charseq_ids], axis=1)
+        print("charseq_ids", charseq_ids.get_shape())
+        shape = charseq_ids.get_shape()
+        charseq_ids_flat = tf.reshape(charseq_ids, tf.stack([shape[0] * shape[1], shape[2], shape[3]]))
+        input_char_words = tf.nn.embedding_lookup(input_chars, charseq_ids_flat)
         input_char_words = tf.layers.dropout(input_char_words, rate=self.keep_prob, training=self.is_training)
         print("input_char_words", input_char_words.get_shape())
         return input_char_words
 
     def _word_embeddings(self):
+        word_ids = tf.concat([self.sentence_word_ids, self.ending_word_ids], axis=1)
+        print("word_ids", word_ids.get_shape())
+        shape = word_ids.get_shape()
+        word_ids_flat = tf.reshape(word_ids, tf.stack([shape[0] * shape[1], shape[2], shape[3]]))
+
         if self.word_embedding == -1:
-            input_words = tf.one_hot(self.word_ids, self.num_words)
+            input_words = tf.one_hot(word_ids_flat, self.num_words)
         else:
             word_emb_mat = tf.get_variable("word_emb", shape=[self.num_words, self.word_embedding])
-            input_words = tf.nn.embedding_lookup(word_emb_mat, self.word_ids)
+            input_words = tf.nn.embedding_lookup(word_emb_mat, word_ids_flat)
             input_words = tf.layers.dropout(input_words, rate=self.keep_prob, training=self.is_training)
         print("input_words", input_words.get_shape())
         return input_words
 
     def _word_rnn(self, inputs):
+        lens = tf.concat([self.sentence_lens, self.ending_lens], axis=1)
+        lens_flat = tf.reshape(lens, (-1))
+
         rnn_cell_words = self._create_cell()
         _, (state_fw, state_bw) = tf.nn.bidirectional_dynamic_rnn(
                 cell_bw=rnn_cell_words,
                 cell_fw=rnn_cell_words,
                 inputs=inputs,
-                sequence_length=self.sentence_lens,
+                sequence_length=lens_flat,
                 dtype=tf.float32)
         states = tf.concat([state_fw, state_bw], axis=1)
         print("states", states.get_shape())
-        return states
+        states_unflat = tf.reshape(states, (-1, self.SENTENCES, self.ENDINGS, self.rnn_cell_dim * 2))
+        print("states_unflat", states_unflat.get_shape())
+        states_sentences = states_unflat[:, :self.SENTENCES, :]
+        states_endings = states_unflat[:, -self.ENDINGS:, :]
+        print("states separate", states_sentences.get_shape(), states_endings.get_shape())
+        return states_sentences, states_endings
 
-    def _fc(self, states):
-        hidden = tf.layers.dense(states, 64, activation=tf.nn.leaky_relu)
-        d1 = tf.layers.dropout(hidden, rate=self.keep_prob, training=self.is_training)
-        output_layer = tf.layers.dense(d1, self.CLASSES, activation=None)
-        print("output_layer", output_layer.get_shape())
-        return output_layer
+    def _fc(self, states_sentences, states_endings):
+        with tf.variable_scope("sentences_fc"):
+            sentences_flat = tf.layers.flatten(states_sentences)
+            sentences_fc = tf.layers.dense(sentences_flat, 1024, activation=tf.nn.leaky_relu)
+            sentences_fc = tf.layers.dense(sentences_fc, 512, activation=tf.nn.leaky_relu)
+            print("sentences_fc", sentences_fc.get_shape())
+        with tf.variable_scope("endings_fc"):
+            ending = tf.squeeze(states_endings[:, 0, :], axis=1)
+            ending_flat = tf.layers.flatten(ending)
+            ending_fc = tf.layers.dense(ending_flat, 1024, activation=tf.nn.leaky_relu, name="fc1")
+            ending1_output = tf.layers.dense(ending_fc, 512, activation=tf.nn.leaky_relu, name="fc2")
+            print("ending1_output", ending1_output.get_shape())
+        with tf.variable_scope("endings_fc"):
+            ending = tf.squeeze(states_endings[:, 1, :], axis=1)
+            ending_flat = tf.layers.flatten(ending)
+            ending_fc = tf.layers.dense(ending_flat, 1024, activation=tf.nn.leaky_relu, name="fc1")
+            ending2_output = tf.layers.dense(ending_fc, 512, activation=tf.nn.leaky_relu, name="fc2")
+            print("ending2_output", ending2_output.get_shape())
+        with tf.variable_scope("common_fc"):
+            flatten = tf.concat([sentences_fc, ending1_output, ending2_output], axis=1)
+            fc = tf.layers.dense(flatten, 1024, activation=tf.nn.leaky_relu, name="fc1")
+            fc = tf.layers.dense(fc, 512, activation=tf.nn.leaky_relu, name="fc2")
+            output = tf.layers.dense(fc, self.CLASSES, activation=None, name="output")
+            print("output", output.get_shape())
+
+        return output
 
     def build_model(self):
         # Construct the graph
@@ -105,10 +142,10 @@ class RNN(Model):
             print("inputs", inputs.get_shape())
 
             with tf.name_scope("word_rnn"):
-                states = self._word_rnn(inputs)
+                states_sentences, states_endings = self._word_rnn(inputs)
 
             with tf.name_scope("fc"):
-                output_layer = self._fc(states)
+                output_layer = self._fc(states_sentences, states_endings)
 
             predictions = tf.cast(tf.argmax(output_layer, 1), tf.int32, name="predictions")
 
