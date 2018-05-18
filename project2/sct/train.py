@@ -1,20 +1,21 @@
 import inspect
 import os
+from typing import *
 
 import numpy as np
 import tensorflow as tf
 
 from . import model as model_module
-from .data.dataset import Dataset
+from .data.dataset import Datasets
 from .flags import define_flags
 
 
-def train(network, dset, batch_size=1, epochs=1):
-    network.train(data=dset, batch_size=batch_size, epochs=epochs)
+def train(network: model_module.Model, dsets: Datasets, batch_size: int = 1, epochs: int = 1) -> None:
+    network.train(data=dsets, batch_size=batch_size, epochs=epochs)
 
 
-def test(network, dset, batch_size, expname):
-    predictions = network.predict_epoch(dset, "test", batch_size)
+def test(network: model_module.Model, dsets: Datasets, batch_size: int = 1, expname: str = "exp") -> None:
+    predictions = network.predict_epoch(dsets.test_file, "test", batch_size)
     pred_dir = os.path.join(network.save_dir, "predictions")
     os.makedirs(pred_dir, exist_ok=True)
     predictions_fname = os.path.join(pred_dir, f"{os.path.basename(FLAGS.checkpoint_path)}_exp{expname}_test.txt")
@@ -23,11 +24,11 @@ def test(network, dset, batch_size, expname):
             print(p, file=f)
 
 
-def main(FLAGS):
+def main(FLAGS: tf.app.flags._FlagValuesWrapper[str, Any]) -> None:
     print("Loading data...")
-    dset = Dataset(FLAGS.train_file, FLAGS.eval_file, FLAGS.test_file)
-    print("Data shapes:", dset.train_data.shape, dset.eval_data.shape, dset.test_data.shape)
-    print("Vocabulary size:", len(dset.vocab))
+    dsets = Datasets(FLAGS.train_file, FLAGS.eval_file, FLAGS.test_file)
+    print("Data shapes:", dsets.train_data.shape, dsets.eval_data.shape, dsets.test_data.shape)
+    print("Vocabulary size:", len(dsets.vocab))
 
     print("Initializing network...")
     network = None
@@ -41,10 +42,10 @@ def main(FLAGS):
 
     if FLAGS.checkpoint_path is None:
         print("Running network...")
-        train(network, dset, batch_size=FLAGS.batch_size, epochs=FLAGS.epochs)
+        train(network, dsets, batch_size=FLAGS.batch_size, epochs=FLAGS.epochs)
     else:
         print("Testing...")
-        test(network, dset, batch_size=FLAGS.batch_size, expname=FLAGS.exp)
+        test(network, dsets, batch_size=FLAGS.batch_size, expname=FLAGS.exp)
 
 
 if __name__ == "__main__":

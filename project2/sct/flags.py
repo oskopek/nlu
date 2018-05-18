@@ -4,7 +4,7 @@ flags = tf.app.flags
 FLAGS = flags.FLAGS
 
 
-def define_flags():
+def define_flags() -> None:
     # Directories
     flags.DEFINE_string('logdir', 'outputs', 'Logdir name.')
     flags.DEFINE_string('exp', 'experiment', 'Experiment name.')

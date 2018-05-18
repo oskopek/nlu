@@ -1,21 +1,24 @@
-from .model import Model
+from typing import *
+
 import tensorflow as tf
+
+from .model import Model
 
 
 class RNN(Model):
     CLASSES = 2
 
     def __init__(self,
-                 rnn_cell,
-                 rnn_cell_dim,
-                 num_words,
-                 num_chars,
+                 rnn_cell: str,
+                 rnn_cell_dim: int,
+                 num_words: int,
+                 num_chars: int,
                  *args,
-                 word_embedding=100,
-                 char_embedding=100,
-                 keep_prob=0.5,
-                 learning_rate=1e-4,
-                 **kwargs):
+                 word_embedding: int = 100,
+                 char_embedding: int = 100,
+                 keep_prob: float = 0.5,
+                 learning_rate: float = 1e-4,
+                 **kwargs) -> None:
         super(RNN, self).__init__(*args, **kwargs)
         self.rnn_cell = rnn_cell
         self.rnn_cell_dim = rnn_cell_dim
@@ -26,7 +29,7 @@ class RNN(Model):
         self.word_embedding = word_embedding
         self.learning_rate = learning_rate
 
-    def _create_cell(self):
+    def _create_cell(self) -> tf.nn.rnn_cell.LayerRNNCell:
         if self.rnn_cell == "LSTM":
             return tf.nn.rnn_cell.LSTMCell(self.rnn_cell_dim)
         elif self.rnn_cell == "GRU":
@@ -34,7 +37,7 @@ class RNN(Model):
         else:
             raise ValueError("Unknown rnn_cell {}".format(self.rnn_cell))
 
-    def _char_embeddings(self):
+    def _char_embeddings(self) -> tf.Tensor:
         if self.char_embedding == -1:
             input_chars = tf.one_hot(self.charseqs, self.num_chars)
         else:
@@ -43,7 +46,7 @@ class RNN(Model):
         print("input_chars", input_chars.get_shape())
         return input_chars
 
-    def _char_rnn(self, input_chars):
+    def _char_rnn(self, input_chars: tf.Tensor) -> tf.Tensor:
         rnn_cell_characters = self._create_cell()
         _, (state_fw, state_bw) = tf.nn.bidirectional_dynamic_rnn(
                 cell_fw=rnn_cell_characters,
@@ -64,7 +67,7 @@ class RNN(Model):
         print("input_char_words", input_char_words.get_shape())
         return input_char_words
 
-    def _word_embeddings(self):
+    def _word_embeddings(self) -> tf.Tensor:
         word_ids = tf.concat([self.sentence_word_ids, self.ending_word_ids], axis=1)
         print("word_ids", word_ids.get_shape())
         shape = word_ids.get_shape()
@@ -79,7 +82,7 @@ class RNN(Model):
         print("input_words", input_words.get_shape())
         return input_words
 
-    def _word_rnn(self, inputs):
+    def _word_rnn(self, inputs: tf.Tensor) -> Tuple[tf.Tensor, tf.Tensor]:
         lens = tf.concat([self.sentence_lens, self.ending_lens], axis=1)
         lens_flat = tf.reshape(lens, (-1))
 
@@ -99,7 +102,7 @@ class RNN(Model):
         print("states separate", states_sentences.get_shape(), states_endings.get_shape())
         return states_sentences, states_endings
 
-    def _fc(self, states_sentences, states_endings):
+    def _fc(self, states_sentences: tf.Tensor, states_endings: tf.Tensor) -> tf.Tensor:
         with tf.variable_scope("sentences_fc"):
             sentences_flat = tf.layers.flatten(states_sentences)
             sentences_fc = tf.layers.dense(sentences_flat, 1024, activation=tf.nn.leaky_relu)
@@ -123,10 +126,9 @@ class RNN(Model):
             fc = tf.layers.dense(fc, 512, activation=tf.nn.leaky_relu, name="fc2")
             output = tf.layers.dense(fc, self.CLASSES, activation=None, name="output")
             print("output", output.get_shape())
-
         return output
 
-    def build_model(self):
+    def build_model(self) -> Tuple[tf.Tensor, tf.Tensor, tf.Operation]:
         # Construct the graph
         with self.session.graph.as_default():
             with tf.name_scope("char_embeddings"):

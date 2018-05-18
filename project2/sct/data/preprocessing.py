@@ -1,10 +1,8 @@
-from collections import Counter
 import re
+from typing import *
 
-import nltk
 import numpy as np
-
-from .utils import MissingDict
+import nltk
 
 # from nltk.stem.api import StemmerI
 # from nltk.stem.regexp import RegexpStemmer
@@ -15,8 +13,14 @@ from .utils import MissingDict
 # from nltk.stem.wordnet import WordNetLemmatizer
 # from nltk.stem.rslp import RSLPStemmer
 
+from .utils import MissingDict
 
-class Preprocessing(object):
+
+class SentencePreprocessing:
+    pass
+
+
+class Preprocessing:
     methods = None
 
     PAD_SYMBOL = "$pad$"
@@ -214,111 +218,3 @@ class Preprocessing(object):
             return vocab, inv_vocab
         else:
             return self._vocab_downsize_dict(lines, *vocab_downsize)
-
-
-class Datasets(object):
-    X_train = None
-    X_train_word = None
-    y_train = None
-    X_eval = None
-    X_eval_word = None
-    y_eval = None
-    X_test = None
-    X_test_word = None
-
-    word_vocab = None
-    inv_word_vocab = None
-
-    data_train = None
-    data_eval = None
-    data_test = None
-
-    def __init__(self, train_file, eval_file, test_file, preprocessing=Preprocessing(), vocab_size=20000):
-        self.train_file = train_file
-        self.eval_file = eval_file
-        self.test_file = test_file
-        self.preprocessing = preprocessing
-        self.vocab_size = vocab_size
-
-    @staticmethod
-    def _read_lines(file):
-        with open(file, "r") as f:
-            lines = f.readlines()
-        return lines
-
-    def load(self):
-        print("Loading data from disk...")
-        X_train_pos = Datasets._read_lines(self.train_pos_file)
-        X_train_neg = Datasets._read_lines(self.train_neg_file)
-        y_train = [1] * len(X_train_pos) + [0] * len(X_train_neg)
-        X_train = X_train_pos + X_train_neg
-        del X_train_pos, X_train_neg
-
-        X_test = Datasets._read_lines(self.test_file)
-        X_test = [line.split(sep=',', maxsplit=1)[1] for line in X_test]  # remove numbers
-
-        print("Splitting...")
-        X_train, X_eval, y_train, y_eval = train_test_split(
-                X_train, y_train, test_size=self.eval_size, random_state=self.random_state)
-
-        print("Preprocessing...")
-        X_train, y_train = self.preprocessing.transform(X_train, labels=y_train)
-        X_eval, y_eval = self.preprocessing.transform(X_eval, labels=y_eval)
-        X_test, _ = self.preprocessing.transform(X_test, labels=None)
-
-        print("Generating vocabulary...")
-        word_vocab, inv_word_vocab = self.preprocessing.vocab(X_train, vocab_downsize=self.vocab_size)
-        # X_train_word = self.preprocessing.vocab(X_train, vocab_downsize=(word_vocab, inv_word_vocab))
-        # X_eval_word = self.preprocessing.vocab(X_eval, vocab_downsize=(word_vocab, inv_word_vocab))
-        # X_test_word = self.preprocessing.vocab(X_test, vocab_downsize=(word_vocab, inv_word_vocab))
-
-        self.X_train = X_train
-        # self.X_train_word = X_train_word
-        self.y_train = y_train
-
-        self.X_eval = X_eval
-        # self.X_eval_word = X_eval_word
-        self.y_eval = y_eval
-
-        self.X_test = X_test
-        # self.X_test_word = X_test_word
-
-        self.word_vocab = word_vocab
-        self.inv_word_vocab = inv_word_vocab
-
-        print("Generating TF data...")
-        self.data_train = StoriesDataset(X_train, y_train, word_vocab=self.word_vocab)
-        self.data_eval = StoriesDataset(X_eval, y_eval, train=self.data_train)
-        self.data_test = StoriesDataset(X_test, None, train=self.data_train)
-
-    def _default_data(self, data):
-        if data is None:
-            return self.train_data
-        else:
-            return data
-
-    def batches_per_epoch_generator(self, batch_size, data=None, shuffle=True):
-        data = self._default_data(data)
-
-        n_rows = data.shape[0]
-        if shuffle:
-            train_permutation = np.random.permutation(n_rows)
-        else:
-            train_permutation = np.arange(n_rows)
-
-        for i in range(0, n_rows, batch_size):
-            batch = data[train_permutation[i:i + batch_size]]
-            if len(batch) == 0:
-                raise StopIteration
-            else:
-                yield batch
-
-    def n_batches_per_epoch(self, batch_size, data=None, **kwargs):
-        data = self._default_data(data)
-        n_rows = data.shape[0]
-        return n_rows // batch_size + n_rows % batch_size
-
-    def batches_per_epoch(self, batch_size, data=None, shuffle=True):
-        n_batches = self.n_batches_per_epoch(batch_size, data=data, shuffle=shuffle)
-        batch_generator = self.batches_per_epoch_generator(batch_size, data=data, shuffle=shuffle)
-        return n_batches, batch_generator

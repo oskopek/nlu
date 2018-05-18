@@ -1,11 +1,28 @@
+import collections
+from typing import *
+
+from dotmap import DotMap
 import numpy as np
+import pandas as pd
+
+from .utils import map_all, invert_vocab, MissingDict, UNK_TOKEN, BASE_VOCAB
+
+
+class Batch:
+    pass
 
 
 class StoriesDataset:
     """Class capable of loading the stories dataset."""
 
-    def __init__(self, sentences, endings, labels, word_vocab=None, train=None):
-        """Load dataset from the given files.
+    def __init__(self,
+                 sentences: List[str],
+                 endings: List[str],
+                 labels: List[int],
+                 word_vocab: Dict[str, int] = None,
+                 train: 'StoriesDataset' = None) -> None:
+        """
+        Load dataset from the given files.
 
         Arguments:
         train: If given, the vocabularies from the training data will be reused.
@@ -73,26 +90,9 @@ class StoriesDataset:
                     for word, id in words.items():
                         self._vocabularies[feature][id] = word
 
-            self._new_permutation()
-
-    def _new_permutation(self):
-        if self.is_train:
-            self._permutation = np.random.permutation(len(self._sentence_lens))
-        else:
-            self._permutation = np.arange(len(self._sentence_lens))
-
-    def vocabulary(self, feature):
-        """Return vocabulary for required feature.
-
-        The features are the following:
-        words
-        chars
-        labels
+    def next_batch(self, batch_size: int) -> Tuple:
         """
-        return self._vocabularies[feature]
-
-    def next_batch(self, batch_size):
-        """Return the next batch.
+        Return the next batch.
 
         Arguments:
         Returns: (sentence_lens, word_ids, charseq_ids, charseqs, charseq_lens, labels)
@@ -119,19 +119,6 @@ class StoriesDataset:
         batch_perm = self._permutation[:batch_size]
         self._permutation = self._permutation[batch_size:]
         return self._next_batch(batch_perm)
-
-    def epoch_finished(self):
-        if len(self._permutation) == 0:
-            self._new_permutation()
-            return True
-        return False
-
-    def whole_data_as_batch(self):
-        """Return the whole dataset in the same result as next_batch.
-
-        Returns the same results as next_batch.
-        """
-        return self._next_batch(np.arange(len(self._sentence_lens)))
 
     def _next_batch(self, batch_perm):
         batch_size = len(batch_perm)
@@ -168,3 +155,194 @@ class StoriesDataset:
             batch_charseqs[i, 0:len(charseqs[i])] = charseqs[i]
 
         return batch_sentence_lens, batch_word_ids, batch_charseq_ids, batch_charseqs, batch_charseq_lens, batch_labels
+
+
+T = TypeVar('T')
+
+
+def generate_balanced_permutation(labels: Sequence[T], batch_size: int = 1, shuffle: bool = True) -> Sequence[int]:
+    """Currently only works for binary labels `{1, 2}` and an approximately balanced dataset."""
+    if not shuffle:
+        return np.arange(len(labels))
+
+    permutation = np.random.permutation(len(labels))  # shuffle all
+    label_split = {1: [], 2: []}  # split by label
+    for i, label in enumerate(labels):
+        label_split[label].append(permutation[i])
+
+    balanced_perm = np.zeros_like(permutation)
+    ones_ratio = len(label_split[1]) / len(labels)  # balance batches by ratio
+    for n_batch in range(0, len(labels), batch_size):
+        counts = {1: 0, 2: 0}
+        for n_sample in range(batch_size):
+            cur_ones_ratio = counts[1] / (counts[1] + counts[2])
+            if cur_ones_ratio < ones_ratio:
+                chosen_label = 1
+            elif cur_ones_ratio > ones_ratio:
+                chosen_label = 2
+            else:
+                chosen_label = np.random.choice(label_split.keys(), 1)
+            balanced_perm[n_batch * batch_size + n_sample] = label_split[chosen_label].pop()
+            counts[chosen_label] += 1
+    return balanced_perm
+
+
+Word = TypeVar('Seq', str)
+Sentence = TypeAlias(Sequence[Word])
+IntSentence = TypeAlias(Sequence[int])
+Sentences = TypeAlias(Sequence[Sentence])
+
+
+class IntSentences(Sequence[IntSentence]):
+    sentences: Sequence[IntSentence] = None
+
+    def __init__(self, sentences: Sequence[Sentence], vocabulary: Dict[Word, int]):
+        self.sentences = map_all(sentences, vocabulary)
+
+    def __len__(self) -> int:
+        return len(self.sentences)
+
+    def __getitem__(self, item) -> IntSentence:
+        return self.sentences[item]
+
+    def batch_iterator(self, permutation: Sequence[int], batch_size: int = 1,
+                       padding: int = 0) -> Generator[Tuple[np.ndarray, np.ndarray]]:
+        assert len(self) == len(permutation)
+        for i in range(0, len(self), batch_size):
+            batch_idxs = permutation[i:i + batch_size]
+
+            if len(batch_idxs) == 0:
+                raise StopIteration
+
+            max_seq_len = max((len(seq) for seq in self.sentences))
+
+            seqs = np.full((len(batch_idxs), max_seq_len), fill_value=padding, dtype=np.int32)
+            lens = np.zeros(len(batch_idxs), dtype=np.int32)
+            for j, idx in enumerate(batch_idxs):
+                seq = self.sentences[idx]
+                lens[j] = len(seq)
+                seqs[j, :lens[j]] = np.asarray(seq)
+
+            yield (seqs, lens)
+
+
+class IntSentencesFrame(Sequence[IntSentences]):
+    """
+    Assumes all sequences have same length!!!
+    """
+
+    int_sentences_frame: Sequence[IntSentences] = None
+    vocabulary: Dict[Word, int] = None
+    inverse_vocabulary: Dict[int, Word] = None
+
+    def __init__(self, sentences_frame: Sequence[Sentences], vocabulary: Dict[Word, int] = None):
+        assert len(sentences_frame) > 0
+        for i in range(1, len(sentences_frame)):
+            assert len(sentences_frame[i - 1]) == len(sentences_frame[i])
+
+        if vocabulary is None:
+            self.vocabulary = IntSentencesFrame._build_vocabulary(sentences_frame)
+        else:
+            self.vocabulary = vocabulary
+        self.inverse_vocabulary = invert_vocab(self.vocabulary)
+
+        self.int_sentences_frame = [IntSentences(sentences, self.vocabulary) for sentences in sentences_frame]
+
+    @staticmethod
+    def _build_vocabulary(columns: Sequence[Sentences]) -> Dict[Word, int]:
+        vocab = MissingDict(BASE_VOCAB, default_val=BASE_VOCAB[UNK_TOKEN])
+        for column in columns:
+            for sentence in column:
+                for word in sentence:
+                    if word not in vocab:
+                        vocab[word] = len(vocab)
+        return vocab
+
+    def batch_iterator(self, permutation, batch_size=1, padding=0):
+        iterators = [seq.batch_iterator(permutation, batch_size=batch_size) for seq in self.int_sentences_frame]
+        for i in range(0, len(self.int_sentences_frame[0]), batch_size):
+            batches = [next(it) for it in iterators]
+            max_batch_len = max(batch.shape[1] for batch, lens in batches)
+            big_batch = np.full((batch_size, len(iterators), max_batch_len), fill_value=padding)
+            big_lens = np.zeros((batch_size, len(iterators)))
+            for j, (batch, lens) in enumerate(batches):
+                big_batch[:, j, :batch.shape[1]] = batch
+                big_lens[:, j] = lens
+            yield (big_batch, big_lens)
+
+    def __len__(self):
+        return len(self.int_sentences_frame)
+
+    def __getitem__(self, item):
+        return self.int_sentences_frame[item]
+
+
+class StoriesDataset2:
+    SENTENCES = 4
+    ENDINGS = 2
+    TOTAL_SENT = SENTENCES + ENDINGS
+
+    story_ids: Sequence[str] = None
+    word_ids: IntSentencesFrame = None
+    charseq_ids: IntSentencesFrame = None
+    # charseqs: Sequence[Word] = None
+    labels: Sequence[int] = None
+    _len: int = None
+
+    def __init__(self, df: pd.DataFrame, data_train: 'StoriesDataset2' = None) -> None:
+        self._len = len(df)
+        self.story_ids = df['storyid'].values
+        self.labels = df['labels'].values
+
+        sentence_indexer = [f"sentence{i+1}" for i in range(self.SENTENCES)]\
+            + [f"ending{i+1}" for i in range(self.ENDINGS)]
+
+        word_sentences_seqs = [[sentence.strip().split() for sentence in df[key].values] for key in sentence_indexer]
+        charseq_sentences_seqs = [df[key].values for key in sentence_indexer]
+        self.word_ids = IntSentencesFrame(word_sentences_seqs, vocabulary=data_train.word_ids.vocabulary)
+        self.charseq_ids = IntSentencesFrame(charseq_sentences_seqs, vocabulary=data_train.charseq_ids.vocabulary)
+        # TODO: Charseqs
+
+    def __len__(self) -> int:
+        return self._len
+
+    @staticmethod
+    def _sequence_batch_iterator(seq: Sequence[T], permutation: Sequence[int],
+                                 batch_size: int = 1) -> Generator[Sequence[T]]:
+        for i in range(0, len(seq), batch_size):
+            batch = list()
+            for idx in permutation[i:i + batch_size]:
+                batch.append(seq[idx])
+            yield batch
+
+    def batch_per_epoch_generator(self, batch_size: int = 1, shuffle: bool = True) -> Generator[Batch]:
+        permutation = generate_balanced_permutation(self.labels, batch_size=batch_size, shuffle=shuffle)
+        word_ids_it = self.word_ids.batch_iterator(permutation, batch_size=batch_size)
+        charseq_ids_it = self.charseq_ids.batch_iterator(permutation, batch_size=batch_size)
+        labels_it = StoriesDataset2._sequence_batch_iterator(self.labels, permutation, batch_size=batch_size)
+        for n_batch in range(self.n_batches(batch_size=batch_size)):
+            word_ids, word_lens = next(word_ids_it)
+            charseq_ids, charseq_lens = next(charseq_ids_it)
+            assert word_lens.shape == charseq_lens.shape
+            assert word_lens == charseq_lens
+            labels = next(labels_it)
+            yield DotMap({
+                    "sentence_word_ids": word_ids[:, :self.SENTENCES, :],
+                    "sentence_charseq_ids": charseq_ids[:, :self.SENTENCES, :],
+                    "ending_word_ids": word_ids[:, -self.ENDINGS:, :],
+                    "ending_charseq_ids": charseq_ids[:, -self.ENDINGS:, :],
+                    "word_lens": word_lens[:, :self.SENTENCES],
+                    "ending_lens": word_lens[:, -self.ENDINGS:],
+                    "charseqs": None,
+                    "charseq_lens": None,
+                    "labels": labels,
+                    "is_training": shuffle
+            })
+
+    def batches_per_epoch(self, batch_size: int = 1, shuffle: bool = True):
+        n_batches = self.n_batches(batch_size=batch_size)
+        batch_generator = self.batch_per_epoch_generator(batch_size=batch_size, shuffle=shuffle)
+        return n_batches, batch_generator
+
+    def n_batches(self, batch_size: int = 1):
+        return len(self) // batch_size + len(self) % batch_size

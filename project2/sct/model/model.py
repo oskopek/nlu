@@ -1,6 +1,9 @@
 from collections import OrderedDict
 from datetime import datetime
 import os
+from typing import *
+from sct.data.dataset import Datasets
+from sct.data.stories import StoriesDataset
 
 import tensorflow as tf
 import tqdm
@@ -10,7 +13,7 @@ class Model:
     SENTENCES = 4
     ENDINGS = 2
 
-    def _placeholders(self):
+    def _placeholders(self) -> None:
         self.global_step = tf.Variable(0, dtype=tf.int64, trainable=False, name="global_step")
 
         self.sentence_lens = tf.placeholder(tf.int32, [None, self.SENTENCES], name="sentence_lens")
@@ -27,7 +30,7 @@ class Model:
         self.labels = tf.placeholder(tf.int32, [None], name="labels")
         self.is_training = tf.placeholder_with_default(False, [], name="is_training")
 
-    def _summaries_and_init(self):
+    def _summaries_and_init(self) -> None:
         current_accuracy, update_accuracy = tf.metrics.accuracy(self.labels, self.predictions)
         current_loss, update_loss = tf.metrics.mean(self.loss)
         self.reset_metrics = tf.variables_initializer(tf.get_collection(tf.GraphKeys.METRIC_VARIABLES))
@@ -53,7 +56,7 @@ class Model:
         with summary_writer.as_default():
             tf.contrib.summary.initialize(session=self.session, graph=self.session.graph)
 
-    def __init__(self, *args, threads=1, seed=42, logdir="logs", expname="exp", **kwargs):
+    def __init__(self, *args, threads: int = 1, seed: int = 42, logdir: str = "logs", expname: str = "exp", **kwargs):
         self.save_dir = os.path.join(f"{logdir}", f"{datetime.now().strftime('%Y-%m-%d_%H%M%S')}-{expname}")
 
         # Create an empty graph and a session
@@ -72,7 +75,7 @@ class Model:
             self.predictions, self.loss, self.training_step = self.build_model()
             self._summaries_and_init()
 
-    def build_model(self):
+    def build_model(self) -> Tuple[tf.Tensor, tf.Tensor, tf.Operation]:
         """
         Remember to use `with self.session.graph.as_default():`.
 
@@ -80,7 +83,7 @@ class Model:
         """
         raise NotImplementedError("To be overridden.")
 
-    def _build_feed_dict(self, batch, is_training=False):
+    def _build_feed_dict(self, batch: Tuple, is_training: bool = False) -> Dict[tf.Tensor, Any]:
         (sentence_lens, ending_lens), (sentence_word_ids, ending_word_ids), (sentence_charseq_ids, ending_charseq_ids),\
             charseqs, charseq_lens, labels = batch
         return {
@@ -97,22 +100,22 @@ class Model:
         }
 
     @staticmethod
-    def _tqdm_metrics(dataset, metrics, names):
+    def _tqdm_metrics(dataset: str, metrics: List[Any], names: List[str]) -> Dict[str, str]:
         d = OrderedDict()
         assert len(metrics) == len(names)
         for metric, name in zip(metrics, names):
-            d[f'{dataset}_{name}'] = metric
+            d[f'{dataset}_{name}'] = str(metric)
         return d
 
-    def train_batch(self, batch):
+    def train_batch(self, batch) -> Dict[str, str]:
         self.session.run(self.reset_metrics)
         fetches = [self.current_metrics, self.training_step, self.summaries["train"]]
         metrics, *_ = self.session.run(fetches, self._build_feed_dict(batch, is_training=True))
         return self._tqdm_metrics("train", metrics, ["acc", "loss"])
 
-    def train(self, data, epochs, batch_size=1):
+    def train(self, data: Datasets, epochs: int, batch_size: int = 1) -> None:
 
-        def _eval_metrics():
+        def _eval_metrics() -> Dict[str, str]:
             dataset = "eval"
             eval_metrics = self.evaluate_epoch(data.eval_data, dataset, batch_size=batch_size)
             return self._tqdm_metrics(dataset, eval_metrics, ["acc", "loss"])
@@ -127,14 +130,14 @@ class Model:
                 batch_tqdm.set_postfix(metrics)
             epoch_tqdm.set_postfix(_eval_metrics())
 
-    def evaluate_epoch(self, data, dataset, batch_size=1):
+    def evaluate_epoch(self, data: StoriesDataset, dataset: str, batch_size: int = 1) -> List[float]:
         self.session.run(self.reset_metrics)
         for batch in data.batches_per_epoch_generator(batch_size, data=data):
             self.session.run(self.update_metrics, self._build_feed_dict(batch))
         metrics, _ = self.session.run(self.current_metrics + [self.summaries[dataset]])
         return metrics
 
-    def predict_epoch(self, data, dataset, batch_size=1):
+    def predict_epoch(self, data: StoriesDataset, dataset: str, batch_size: int = 1) -> List[int]:
         self.session.run(self.reset_metrics)
         predictions = []
         self.session.run(self.reset_metrics)
