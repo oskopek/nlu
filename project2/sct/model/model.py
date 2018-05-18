@@ -2,9 +2,12 @@ from collections import OrderedDict
 from datetime import datetime
 import os
 from typing import *
-from sct.data.dataset import Datasets
+
+from sct.data.datasets import Datasets
 from sct.data.stories import StoriesDataset
 
+from dotmap import DotMap
+import numpy as np
 import tensorflow as tf
 import tqdm
 
@@ -12,21 +15,23 @@ import tqdm
 class Model:
     SENTENCES = 4
     ENDINGS = 2
+    TOTAL_SENTENCES = SENTENCES + ENDINGS
 
     def _placeholders(self) -> None:
         self.global_step = tf.Variable(0, dtype=tf.int64, trainable=False, name="global_step")
 
-        self.sentence_lens = tf.placeholder(tf.int32, [None, self.SENTENCES], name="sentence_lens")
-        self.ending_lens = tf.placeholder(tf.int32, [None, self.ENDINGS], name="ending_lens")
+        # [batch_size, SENTENCES x sentence_id]
+        self.sentence_ids = tf.placeholder(tf.int32, [None, self.TOTAL_SENTENCES], name="sentence_ids")
 
-        self.sentence_word_ids = tf.placeholder(tf.int32, [None, self.SENTENCES, None], name="sentence_word_ids")
-        self.ending_word_ids = tf.placeholder(tf.int32, [None, self.ENDINGS, None], name="ending_word_ids")
+        # [unique sentence_ids, max_word_ids]
+        self.word_ids = tf.placeholder(tf.int32, [None, None], name="word_ids")
+        self.sentence_lens = tf.placeholder(tf.int32, [None], name="sentence_lens")
 
-        self.sentence_charseq_ids = tf.placeholder(tf.int32, [None, self.SENTENCES, None], name="sentence_charseq_ids")
-        self.ending_charseq_ids = tf.placeholder(tf.int32, [None, self.ENDINGS, None], name="ending_charseq_ids")
+        # [unique word_ids, max_char_ids]
+        self.char_ids = tf.placeholder(tf.int32, [None, None], name="char_ids")
+        self.word_lens = tf.placeholder(tf.int32, [None], name="word_lens")
 
-        self.charseqs = tf.placeholder(tf.int32, [None, None], name="charseqs")
-        self.charseq_lens = tf.placeholder(tf.int32, [None], name="charseq_lens")
+        # [batch_size]
         self.labels = tf.placeholder(tf.int32, [None], name="labels")
         self.is_training = tf.placeholder_with_default(False, [], name="is_training")
 
@@ -83,20 +88,13 @@ class Model:
         """
         raise NotImplementedError("To be overridden.")
 
-    def _build_feed_dict(self, batch: Tuple, is_training: bool = False) -> Dict[tf.Tensor, Any]:
-        (sentence_lens, ending_lens), (sentence_word_ids, ending_word_ids), (sentence_charseq_ids, ending_charseq_ids),\
-            charseqs, charseq_lens, labels = batch
-        return {
-                self.sentence_lens: sentence_lens,
-                self.ending_lens: ending_lens,
-                self.sentence_word_ids: sentence_word_ids,
-                self.ending_word_ids: ending_word_ids,
-                self.sentence_charseq_ids: sentence_charseq_ids,
-                self.ending_charseq_ids: ending_charseq_ids,
-                self.charseqs: charseqs,
-                self.charseq_lens: charseq_lens,
-                self.labels: labels,
-                self.is_training: is_training
+    def _build_feed_dict(self, batch: DotMap[str, Union[np.ndarray, bool]],
+                         is_training: bool = False) -> Dict[tf.Tensor, Union[np.ndarray, bool]]:
+        assert is_training == batch.is_training
+        return {self.sentence_ids: batch.sentence_ids,
+                self.word_ids: batch.word_ids, self.sentence_lens: batch.sentence_lens,
+                self.char_ids: batch.char_ids, self.word_lens: batch.word_lens,
+                self.labels: batch.labels, self.is_training: batch.is_training
         }
 
     @staticmethod

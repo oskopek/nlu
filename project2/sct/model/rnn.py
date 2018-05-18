@@ -39,10 +39,10 @@ class RNN(Model):
 
     def _char_embeddings(self) -> tf.Tensor:
         if self.char_embedding == -1:
-            input_chars = tf.one_hot(self.charseqs, self.num_chars)
+            input_chars = tf.one_hot(self.char_ids, self.num_chars)
         else:
             char_emb_mat = tf.get_variable("char_emb", shape=[self.num_chars, self.char_embedding])
-            input_chars = tf.nn.embedding_lookup(char_emb_mat, self.charseqs)
+            input_chars = tf.nn.embedding_lookup(char_emb_mat, self.char_ids)
         print("input_chars", input_chars.get_shape())
         return input_chars
 

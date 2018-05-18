@@ -17,10 +17,6 @@ def define_flags() -> None:
     flags.DEFINE_string('eval_file', 'data/stories.eval.csv', 'Evaluation data file.')
     flags.DEFINE_string('test_file', 'data/stories.test.csv', 'Test data file.')
 
-    # Data parsing settings
-    flags.DEFINE_integer('vocab_size')
-    flags.DEFINE_integer('max_sentence_len')
-
     # Model choice
     flags.DEFINE_string('model', 'RNN', 'Model class name.')
 

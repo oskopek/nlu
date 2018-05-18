@@ -6,7 +6,7 @@ import numpy as np
 import tensorflow as tf
 
 from . import model as model_module
-from .data.dataset import Datasets
+from .data.datasets import Datasets
 from .flags import define_flags
 
 
@@ -27,8 +27,6 @@ def test(network: model_module.Model, dsets: Datasets, batch_size: int = 1, expn
 def main(FLAGS: tf.app.flags._FlagValuesWrapper[str, Any]) -> None:
     print("Loading data...")
     dsets = Datasets(FLAGS.train_file, FLAGS.eval_file, FLAGS.test_file)
-    print("Data shapes:", dsets.train_data.shape, dsets.eval_data.shape, dsets.test_data.shape)
-    print("Vocabulary size:", len(dsets.vocab))
 
     print("Initializing network...")
     network = None

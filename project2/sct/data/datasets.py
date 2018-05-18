@@ -4,13 +4,13 @@ import numpy as np
 import pandas as pd
 
 from .preprocessing import Preprocessing
-from .stories import StoriesDataset2
+from .stories import StoriesDataset
 
 
 class Datasets:
-    data_train: StoriesDataset2 = None
-    data_eval: StoriesDataset2 = None
-    data_test: StoriesDataset2 = None
+    train: StoriesDataset = None
+    eval: StoriesDataset = None
+    test: StoriesDataset = None
 
     def __init__(self, train_file: str, eval_file: str, test_file: str,
                  preprocessing: Preprocessing = Preprocessing()) -> None:
@@ -27,7 +27,7 @@ class Datasets:
 
     @staticmethod
     # storyid, sentence1, sentence2, sentence3, sentence4, ending1, ending2, label
-    def read_train(file: str) -> pd.DataFrame:
+    def _read_train(file: str) -> pd.DataFrame:
         df = Datasets._read(file)
         del df['storytitle']
         df = df.rename(index=str, columns={"sentence5": "ending1"})
@@ -36,7 +36,7 @@ class Datasets:
         return df
 
     @staticmethod
-    def read_eval(file: str) -> pd.DataFrame:
+    def _read_eval(file: str) -> pd.DataFrame:
         df = Datasets._read(file)
         df = df.rename(
                 index=str,
@@ -85,23 +85,24 @@ class Datasets:
 
     def load(self) -> None:
         print("Loading data from disk...")
-        df_train = self.read_train(self.train_file)
-        df_eval = self.read_eval(self.eval_file)
+        df_train = self._read_train(self.train_file)
+        df_eval = self._read_eval(self.eval_file)
         df_test = None
         if self.test_file:
-            df_test = self.read_eval(self.test_file)
+            df_test = self._read_eval(self.test_file)
 
         print("Sampling random train endings...")
         Datasets._sample_random_train_endings(df_train)
 
         print("Pre-processing...")
-        self.preprocessing.transform(df_train)
-        self.preprocessing.transform(df_eval, eval=True)
-        if self.test_file:
-            self.preprocessing.transform(df_test, eval=True)
+        if self.preprocessing: # TODO: Implement pre-processing
+            self.preprocessing.transform(df_train, eval=False)
+            self.preprocessing.transform(df_eval, eval=True)
+            if self.test_file:
+                self.preprocessing.transform(df_test, eval=True)
 
         print("Generating TF data...")
-        self.data_train = StoriesDataset2(df_train)
-        self.data_eval = StoriesDataset2(df_eval, train_data=self.data_train)
+        self.train = StoriesDataset(df_train, vocabularies=None)
+        self.eval = StoriesDataset(df_eval, vocabularies=self.train.vocabularies)
         if self.test_file:
-            self.data_test = StoriesDataset2(df_test, train_data=self.data_train)
+            self.test = StoriesDataset(df_test, vocabularies=self.train.vocabularies)

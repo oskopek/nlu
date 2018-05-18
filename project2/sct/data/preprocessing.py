@@ -16,10 +16,6 @@ import nltk
 from .utils import MissingDict
 
 
-class SentencePreprocessing:
-    pass
-
-
 class Preprocessing:
     methods = None
 
@@ -60,7 +56,7 @@ class Preprocessing:
                 (self.lemmatization, lemmatization)
         ]
 
-    def transform(self, lines, labels=None):  # labels == None => test transformation
+    def transform(self, lines, eval: bool=False):  # labels == None => test transformation
         for fn, args in self.methods:
             # assert len(lines) == len(labels)
             if args:
