@@ -43,7 +43,7 @@ class Model:
         self.update_metrics = [update_accuracy, update_loss]
 
         summary_writer = tf.contrib.summary.create_file_writer(self.save_dir, flush_millis=5_000)
-        self.summaries = {}
+        self.summaries = Dict[str, List[tf.Operation]]()
         with summary_writer.as_default(), tf.contrib.summary.record_summaries_every_n_global_steps(10):
             self.summaries["train"] = [
                     tf.contrib.summary.scalar("train/loss", update_loss),
@@ -61,7 +61,8 @@ class Model:
         with summary_writer.as_default():
             tf.contrib.summary.initialize(session=self.session, graph=self.session.graph)
 
-    def __init__(self, *args, threads: int = 1, seed: int = 42, logdir: str = "logs", expname: str = "exp", **kwargs):
+    def __init__(self, *args, threads: int = 1, seed: int = 42, logdir: str = "logs", expname: str = "exp",
+                 **kwargs) -> None:
         self.save_dir = os.path.join(f"{logdir}", f"{datetime.now().strftime('%Y-%m-%d_%H%M%S')}-{expname}")
 
         # Create an empty graph and a session
@@ -103,13 +104,13 @@ class Model:
 
     @staticmethod
     def _tqdm_metrics(dataset: str, metrics: List[Any], names: List[str]) -> Dict[str, str]:
-        d = OrderedDict()
+        d = OrderedDict[str, str]()
         assert len(metrics) == len(names)
         for metric, name in zip(metrics, names):
             d[f'{dataset}_{name}'] = str(metric)
         return d
 
-    def train_batch(self, batch) -> Dict[str, str]:
+    def train_batch(self, batch: DotMap[str, Union[np.ndarray, bool]]) -> Dict[str, str]:
         self.session.run(self.reset_metrics)
         fetches = [self.current_metrics, self.training_step, self.summaries["train"]]
         metrics, *_ = self.session.run(fetches, self._build_feed_dict(batch, is_training=True))
@@ -141,7 +142,7 @@ class Model:
 
     def predict_epoch(self, data: StoriesDataset, dataset: str, batch_size: int = 1) -> List[int]:
         self.session.run(self.reset_metrics)
-        predictions = []
+        predictions = List[int]()
         self.session.run(self.reset_metrics)
         for batch in data.batch_per_epoch_generator(batch_size, shuffle=False):
             batch_predictions = self.session.run(self.predictions, self._build_feed_dict(batch))

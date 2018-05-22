@@ -1,4 +1,4 @@
-from typing import *
+from typing import TypeVar, Optional, Sequence, Dict
 
 import numpy as np
 
@@ -10,14 +10,14 @@ PAD_TOKEN = '$pad$'
 BASE_VOCAB = {PAD_TOKEN: 0, UNK_TOKEN: 1}
 
 
-class MissingDict(dict, Dict[K, V]):
+class MissingDict(Dict[K, V]):
     """Replace missing values with the default value, but do not insert them."""
 
-    def __init__(self, default_val: V = None, *args, **kwargs):
+    def __init__(self, *args, default_val: Optional[V] = None, **kwargs) -> None:
         super(MissingDict, self).__init__(*args, **kwargs)
-        self.default_val: V = default_val
+        self.default_val: Optional[V] = default_val
 
-    def __missing__(self, key: K):
+    def __missing__(self, key: K) -> Optional[V]:
         return self.default_val
 
 
