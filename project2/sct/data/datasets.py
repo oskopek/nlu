@@ -1,4 +1,4 @@
-from typing import *
+from typing import Optional, List
 
 import numpy as np
 import pandas as pd
@@ -8,16 +8,18 @@ from .stories import StoriesDataset
 
 
 class Datasets:
-    train: StoriesDataset = None
-    eval: StoriesDataset = None
-    test: StoriesDataset = None
 
-    def __init__(self, train_file: str, eval_file: str, test_file: str,
-                 preprocessing: Preprocessing = Preprocessing()) -> None:
+    def __init__(self,
+                 train_file: str,
+                 eval_file: str,
+                 test_file: str,
+                 preprocessing: Optional[Preprocessing] = Preprocessing()) -> None:
         self.train_file = train_file
         self.eval_file = eval_file
         self.test_file = test_file
         self.preprocessing = preprocessing
+
+        self._load()
 
     @staticmethod
     def _read(file: str) -> pd.DataFrame:
@@ -83,7 +85,7 @@ class Datasets:
                 df.at[i, 'ending1'], df.at[i, 'ending2'] = df.at[i, 'ending2'], df.at[i, 'ending1']
                 df.at[i, 'label'] = 2
 
-    def load(self) -> None:
+    def _load(self) -> None:
         print("Loading data from disk...")
         df_train = self._read_train(self.train_file)
         df_eval = self._read_eval(self.eval_file)
@@ -95,7 +97,7 @@ class Datasets:
         Datasets._sample_random_train_endings(df_train)
 
         print("Pre-processing...")
-        if self.preprocessing: # TODO: Implement pre-processing
+        if self.preprocessing:  # TODO: Implement pre-processing
             self.preprocessing.transform(df_train, eval=False)
             self.preprocessing.transform(df_eval, eval=True)
             if self.test_file:

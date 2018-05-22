@@ -21,18 +21,24 @@ class Model:
         self.global_step = tf.Variable(0, dtype=tf.int64, trainable=False, name="global_step")
 
         # [batch_size, SENTENCES x sentence_id]
+        self.batch_to_sentence_ids = tf.placeholder(
+                tf.int32, [None, self.TOTAL_SENTENCES], name="batch_to_sentence_ids")
         self.batch_to_sentences = tf.placeholder(tf.int32, [None, self.TOTAL_SENTENCES], name="batch_to_sentences")
 
-        # [unique sentence_ids, max_word_ids]
+        # [unique sentence ids, max_word_ids]
+        self.sentence_to_word_ids = tf.placeholder(tf.int32, [None, None], name="sentence_to_word_ids")
         self.sentence_to_words = tf.placeholder(tf.int32, [None, None], name="sentence_to_words")
+        # [unique sentence ids]
         self.sentence_lens = tf.placeholder(tf.int32, [None], name="sentence_lens")
 
-        # [unique word_ids, max_char_ids]
-        self.word_to_chars = tf.placeholder(tf.int32, [None, None], name="word_to_chars")
+        # [unique word ids, max_char_ids]
+        self.word_to_char_ids = tf.placeholder(tf.int32, [None, None], name="word_to_chars")
+        # [unique word ids]
         self.word_lens = tf.placeholder(tf.int32, [None], name="word_lens")
 
         # [batch_size]
         self.labels = tf.placeholder(tf.int32, [None], name="labels")
+        # [] bool scalar
         self.is_training = tf.placeholder_with_default(False, [], name="is_training")
 
     def _summaries_and_init(self) -> None:
@@ -93,10 +99,12 @@ class Model:
                          is_training: bool = False) -> Dict[tf.Tensor, Union[np.ndarray, bool]]:
         assert is_training == batch.is_training
         return {
+                self.batch_to_sentence_ids: batch.batch_to_sentence_ids,
                 self.batch_to_sentences: batch.batch_to_sentences,
+                self.sentence_to_word_ids: batch.sentence_to_word_ids,
                 self.sentence_to_words: batch.sentence_to_words,
                 self.sentence_lens: batch.sentence_lens,
-                self.word_to_chars: batch.word_to_chars,
+                self.word_to_char_ids: batch.word_to_char_ids,
                 self.word_lens: batch.word_lens,
                 self.labels: batch.labels,
                 self.is_training: batch.is_training

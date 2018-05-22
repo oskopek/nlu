@@ -41,10 +41,10 @@ class RNN(Model):
 
     def _char_embeddings(self) -> tf.Tensor:
         if self.char_embedding == -1:
-            input_chars = tf.one_hot(self.word_to_chars, depth=self.num_chars)
+            input_chars = tf.one_hot(self.word_to_char_ids, depth=self.num_chars)
         else:
             char_emb_mat = tf.get_variable("char_emb", shape=[self.num_chars, self.char_embedding])
-            input_chars = tf.nn.embedding_lookup(char_emb_mat, self.word_to_chars)
+            input_chars = tf.nn.embedding_lookup(char_emb_mat, self.word_to_char_ids)
         print("input_chars", input_chars.get_shape())
 
         rnn_cell_characters = self._create_cell()
@@ -64,18 +64,18 @@ class RNN(Model):
 
     def _word_embeddings(self) -> tf.Tensor:
         # [batch_size, SENTENCE x sentence_id, max_word_ids]
-        batch_to_sentences = tf.nn.embedding_lookup(self.sentence_to_words, ids=self.batch_to_sentences)
+        batch_to_sentences = tf.nn.embedding_lookup(self.sentence_to_word_ids, ids=self.batch_to_sentences)
         shape = batch_to_sentences.get_shape()
         print("batch_to_sentences", shape)
-        sentence_to_words = tf.reshape(batch_to_sentences, tf.stack([shape[0] * shape[1], shape[2], shape[3]]))
+        sentence_to_word_ids = tf.reshape(batch_to_sentences, tf.stack([shape[0] * shape[1], shape[2], shape[3]]))
 
         if self.word_embedding == -1:
-            sentence_word_embeddings = tf.one_hot(sentence_to_words, self.num_words)
+            sentence_word_embeddings = tf.one_hot(sentence_to_word_ids, self.num_words)
         else:
             word_emb_mat = tf.get_variable("word_emb", shape=[self.num_words, self.word_embedding])
-            sentence_word_embeddings = tf.nn.embedding_lookup(word_emb_mat, sentence_to_words)
-            sentence_word_embeddings = tf.layers.dropout(
-                    sentence_word_embeddings, rate=self.keep_prob, training=self.is_training)
+            sentence_word_embeddings = tf.nn.embedding_lookup(word_emb_mat, ids=sentence_to_word_ids)
+            # sentence_word_embeddings = tf.layers.dropout(
+            #         sentence_word_embeddings, rate=self.keep_prob, training=self.is_training)
         print("sentence_word_embeddings", sentence_word_embeddings.get_shape())
         return sentence_word_embeddings
 

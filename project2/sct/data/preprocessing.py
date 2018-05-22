@@ -1,8 +1,10 @@
+from collections import Counter
 import re
-from typing import *
+from typing import Any, Callable, List, Tuple, Dict, Optional
 
 import numpy as np
 import nltk
+import pandas as pd
 
 # from nltk.stem.api import StemmerI
 # from nltk.stem.regexp import RegexpStemmer
@@ -15,34 +17,35 @@ import nltk
 
 from .utils import MissingDict
 
+LinesType = pd.DataFrame
+ArgsType = Any
+
 
 class Preprocessing:
-    methods = None
+    methods: List[Tuple[Callable[[LinesType, ArgsType], LinesType], ArgsType]] = None
 
-    PAD_SYMBOL = "$pad$"
-    UNK_SYMBOL = "$unk$"
-    BASE_VOCAB = {PAD_SYMBOL: 0, UNK_SYMBOL: 1}
+    PAD_SYMBOL: str = "$pad$"
+    UNK_SYMBOL: str = "$unk$"
+    BASE_VOCAB: Dict[str, int] = {PAD_SYMBOL: 0, UNK_SYMBOL: 1}
 
     def __init__(
             self,
-            standardize=True,
-            segment_hashtags=10,
-            contractions=True,
-            rem_numbers=True,
-            punct_squash=True,
-            fix_slang=True,
-            word_squash=3,
-            expl_negations=False,
-            rem_stopwords=False,
-            stemming=nltk.stem.PorterStemmer(),  #  stemming=None,
-            #  lemmatization=nltk.stem.WordNetLemmatizer(),
-            lemmatization=None,
-            padding_size=40):
+            standardize: bool = True,
+            contractions: bool = True,
+            rem_numbers: bool = True,
+            punct_squash: bool = True,
+            fix_slang: bool = True,
+            word_squash: int = 3,
+            expl_negations: bool = False,
+            rem_stopwords: bool = False,
+            stemming: Optional[nltk.stem.StemmerI] = nltk.stem.PorterStemmer(),
+            #  lemmatization: Optional[nltk.stem.WordNetLemmatizer] = nltk.stem.WordNetLemmatizer(),
+            lemmatization: Optional[nltk.stem.WordNetLemmatizer] = None,
+            padding_size=40) -> None:
         self.padding_size = padding_size
         self.methods = [  # line operations
                 (self.standardize, standardize),
                 (self.word_squash, word_squash),
-                (self.segment_hashtags, segment_hashtags),
                 (self.fix_slang, fix_slang),
                 (self.contractions, contractions),
                 (self.rem_numbers, rem_numbers),
@@ -56,14 +59,13 @@ class Preprocessing:
                 (self.lemmatization, lemmatization)
         ]
 
-    def transform(self, lines, eval: bool=False):  # labels == None => test transformation
+    def transform(self, lines: LinesType, eval: bool = False):  # labels == None => test transformation
         for fn, args in self.methods:
-            # assert len(lines) == len(labels)
             if args:
-                lines, labels = fn(lines, labels, args)
-        return lines, labels
+                lines = fn(lines, args)
+        return lines
 
-    def contractions(self, lines, labels, args):
+    def contractions(self, lines: LinesType, args: ArgsType):
         re_map = [
                 (r" ([a-z]+)'re ", r" \1 are "),
                 (r" youre ", " you are "),
@@ -88,9 +90,9 @@ class Preprocessing:
                     line = re.sub(reg, subs, line)
                 yield line
 
-        return contraction_map(lines), labels
+        return contraction_map(lines)
 
-    def standardize(self, lines, labels, args):
+    def standardize(self, lines: LinesType, args: ArgsType):
 
         def _standardize(lines):
             for line in lines:
@@ -98,9 +100,9 @@ class Preprocessing:
                 newline = " ".join([w.strip().lower() for w in newline])
                 yield newline
 
-        return _standardize(lines), labels
+        return _standardize(lines)
 
-    def rem_numbers(self, lines, labels, args):
+    def rem_numbers(self, lines: LinesType, args: ArgsType):
         re_map = [
                 (r" [0-9]+ ", " "),
                 (r"[0-9]+", " "),
@@ -114,9 +116,9 @@ class Preprocessing:
                     line = re.sub(reg, subs, line)
                 yield line
 
-        return num_map(lines), labels
+        return num_map(lines)
 
-    def lines_to_matrix(self, lines, labels, args):
+    def lines_to_matrix(self, lines: LinesType, args: ArgsType):
         lines = list(lines)
         if labels:
             if len(lines) != len(labels):
@@ -124,9 +126,9 @@ class Preprocessing:
                 assert len(lines) != len(labels)
         for i, line in enumerate(lines):
             lines[i] = line.split()
-        return lines, labels
+        return lines
 
-    def punct_squash(self, lines, labels, args):
+    def punct_squash(self, lines: LinesType, args: ArgsType) -> LinesType:
         pattern = re.compile(r"([^a-z0-9] ?)\1+")
         repl = r" \1 "
 
@@ -134,49 +136,37 @@ class Preprocessing:
             for line in lines:
                 yield re.sub(pattern, repl, line)
 
-        return gen_punct_squash(lines), labels
+        return gen_punct_squash(lines)
 
-    def rem_stopwords(self, lines, labels, args):
+    def rem_stopwords(self, lines: LinesType, args: ArgsType) -> LinesType:
         stop_words = set(nltk.corpus.stopwords.words('english'))
+        for i, line in enumerate(lines):
+            new_line = []
+            for word in line:
+                if word not in stop_words:
+                    new_line.append(word)
+            lines[i] = new_line
+        return lines
 
-        def gen_stopwords(lines):
-            for i, line in enumerate(lines):
-                new_line = []
-                for word in line:
-                    if word not in stop_words:
-                        new_line.append(word)
-                lines[i] = new_line
-            return lines
+    def stemming(self, lines: LinesType, stemmer) -> LinesType:
+        for i, line in enumerate(lines):
+            new_line = []
+            for word in line:
+                stemmed = stemmer.stem(word)
+                new_line.append(stemmed)
+            lines[i] = new_line
+        return lines
 
-        return gen_stopwords(lines), labels
+    def lemmatization(self, lines: LinesType, lemmatizer) -> LinesType:
+        for i, line in enumerate(lines):
+            new_line = []
+            for word in line:
+                lemma = lemmatizer.lemmatize(word)
+                new_line.append(lemma)
+            lines[i] = new_line
+        return lines
 
-    def stemming(self, lines, labels, stemmer):
-
-        def gen_stem(lines):
-            for i, line in enumerate(lines):
-                new_line = []
-                for word in line:
-                    stemmed = stemmer.stem(word)
-                    new_line.append(stemmed)
-                lines[i] = new_line
-            return lines
-
-        return gen_stem(lines), labels
-
-    def lemmatization(self, lines, labels, lemmatizer):
-
-        def gen_lemma(lines):
-            for i, line in enumerate(lines):
-                new_line = []
-                for word in line:
-                    lemma = lemmatizer.lemmatize(word)
-                    new_line.append(lemma)
-                lines[i] = new_line
-            return lines
-
-        return gen_lemma(lines), labels
-
-    def _vocab_downsize_dict(self, lines, vocab, inv_vocab):
+    def _vocab_downsize_dict(self, lines: LinesType, vocab, inv_vocab):
         lines = np.asarray(lines)
         data = np.full((len(lines), self.padding_size), "$pad$", dtype=object)
         cut_counter = 0
@@ -192,7 +182,7 @@ class Preprocessing:
         data = np.vectorize(lambda word: inv_vocab[vocab[word]])(data)
         return data
 
-    def _vocab_downsize_tosize(self, lines, vocab_size):
+    def _vocab_downsize_tosize(self, lines: LinesType, vocab_size):
         counter = Counter()
         for line in lines:
             counter.update(line)
@@ -207,7 +197,7 @@ class Preprocessing:
 
         return MissingDict(vocab, default_val=vocab[self.UNK_SYMBOL])
 
-    def vocab(self, lines, vocab_downsize):
+    def vocab(self, lines: LinesType, vocab_downsize):
         if isinstance(vocab_downsize, int):
             vocab = self._vocab_downsize_tosize(lines, vocab_downsize)
             inv_vocab = {v: k for k, v in vocab.items()}
