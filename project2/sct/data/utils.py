@@ -14,7 +14,7 @@ class MissingDict(Dict[K, V]):
     """Replace missing values with the default value, but do not insert them."""
 
     def __init__(self, *args, default_val: Optional[V] = None, **kwargs) -> None:
-        super(MissingDict, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.default_val: Optional[V] = default_val
 
     def __missing__(self, key: K) -> Optional[V]:

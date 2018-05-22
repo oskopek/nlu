@@ -15,7 +15,7 @@ def define_flags() -> None:
     # Data files
     flags.DEFINE_string('train_file', 'data/stories.train.csv', 'Train data file.')
     flags.DEFINE_string('eval_file', 'data/stories.eval.csv', 'Evaluation data file.')
-    flags.DEFINE_string('test_file', 'data/stories.test.csv', 'Test data file.')
+    flags.DEFINE_string('test_file', None, 'Test data file.')
 
     # Model choice
     flags.DEFINE_string('model', 'RNN', 'Model class name.')

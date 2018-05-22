@@ -72,7 +72,7 @@ class Datasets:
             indexes = np.arange(0, length)
             for idx in indexes:
                 mask = generate_mask(idx, len(indexes))
-                sampled = np.random.choice(indexes, 1, replace=True, p=mask)
+                sampled = np.random.choice(indexes, replace=True, p=mask)
                 assert sampled != idx
                 res.append(sampled)
             return res
@@ -80,10 +80,10 @@ class Datasets:
         sampled_indexes = sample_without_current(len(df))
         sampled_swap = np.random.choice([True, False], size=len(df))
         for i in range(len(df)):
-            df.at[i, 'ending2'] = df.at[sampled_indexes[i], 'ending1']
+            df.ix[i, ['ending2']] = df['ending1'][sampled_indexes[i]]
             if sampled_swap[i]:  # swap ending1 and ending2
-                df.at[i, 'ending1'], df.at[i, 'ending2'] = df.at[i, 'ending2'], df.at[i, 'ending1']
-                df.at[i, 'label'] = 2
+                df.ix[i, ['ending1']], df.ix[i, ['ending2']] = df['ending2'][i], df['ending1'][i]
+                df.ix[i, ['label']] = 2
 
     def _load(self) -> None:
         print("Loading data from disk...")
@@ -98,10 +98,10 @@ class Datasets:
 
         print("Pre-processing...")
         if self.preprocessing:  # TODO: Implement pre-processing
-            self.preprocessing.transform(df_train, eval=False)
-            self.preprocessing.transform(df_eval, eval=True)
+            self.preprocessing.transform(df_train, evaluate=False)
+            self.preprocessing.transform(df_eval, evaluate=True)
             if self.test_file:
-                self.preprocessing.transform(df_test, eval=True)
+                self.preprocessing.transform(df_test, evaluate=True)
 
         print("Generating TF data...")
         self.train = StoriesDataset(df_train, vocabularies=None)

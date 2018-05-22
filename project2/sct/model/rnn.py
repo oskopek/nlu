@@ -11,8 +11,6 @@ class RNN(Model):
     def __init__(self,
                  rnn_cell: str,
                  rnn_cell_dim: int,
-                 num_words: int,
-                 num_chars: int,
                  *args,
                  word_embedding: int = 100,
                  char_embedding: int = 100,
@@ -20,18 +18,18 @@ class RNN(Model):
                  learning_rate: float = 1e-4,
                  grad_clip: float = 10.0,
                  **kwargs) -> None:
-        super(RNN, self).__init__(*args, **kwargs)
         self.rnn_cell = rnn_cell
         self.rnn_cell_dim = rnn_cell_dim
         self.keep_prob = keep_prob
-        self.num_words = num_words
-        self.num_chars = num_chars
         self.char_embedding = char_embedding
         self.word_embedding = word_embedding
         self.learning_rate = learning_rate
         self.grad_clip = grad_clip
 
-    def _create_cell(self) -> tf.nn.rnn_cell.LayerRNNCell:
+        # Call super last, because our build_model method probably needs above initialization to happen first
+        super().__init__(*args, **kwargs)
+
+    def _create_cell(self) -> tf.nn.rnn_cell.RNNCell:
         if self.rnn_cell == "LSTM":
             return tf.nn.rnn_cell.LSTMCell(self.rnn_cell_dim)
         elif self.rnn_cell == "GRU":
@@ -64,10 +62,13 @@ class RNN(Model):
 
     def _word_embeddings(self) -> tf.Tensor:
         # [batch_size, SENTENCE x sentence_id, max_word_ids]
+        print("self.sentence_to_word_ids", self.sentence_to_word_ids.get_shape())
+        print("self.batch_to_sentences", self.batch_to_sentences.get_shape())
         batch_to_sentences = tf.nn.embedding_lookup(self.sentence_to_word_ids, ids=self.batch_to_sentences)
-        shape = batch_to_sentences.get_shape()
-        print("batch_to_sentences", shape)
-        sentence_to_word_ids = tf.reshape(batch_to_sentences, tf.stack([shape[0] * shape[1], shape[2], shape[3]]))
+        print("batch_to_sentences", batch_to_sentences.get_shape())
+        self.batch_size = tf.shape(batch_to_sentences)[0]
+        sentence_to_word_ids = tf.reshape(batch_to_sentences, (self.batch_size * self.TOTAL_SENTENCES, -1))
+        print("sentence_to_word_ids", sentence_to_word_ids.get_shape())
 
         if self.word_embedding == -1:
             sentence_word_embeddings = tf.one_hot(sentence_to_word_ids, self.num_words)
@@ -80,15 +81,16 @@ class RNN(Model):
         return sentence_word_embeddings
 
     def _sentence_rnn(self, inputs: tf.Tensor) -> tf.Tensor:
-        lens = tf.nn.embedding_lookup(self.sentence_lens, self.batch_to_sentences)
-        lens_flat = tf.reshape(lens, (-1))
+        batch_sentence_lens = tf.nn.embedding_lookup(self.sentence_lens, self.batch_to_sentences)
+        print("batch_sentence_lens", batch_sentence_lens.get_shape())
+        batch_sentence_lens_flat = tf.reshape(batch_sentence_lens, (-1,))
 
         rnn_cell_words = self._create_cell()
         _, (state_fw, state_bw) = tf.nn.bidirectional_dynamic_rnn(
                 cell_bw=rnn_cell_words,
                 cell_fw=rnn_cell_words,
                 inputs=inputs,
-                sequence_length=lens_flat,
+                sequence_length=batch_sentence_lens_flat,
                 dtype=tf.float32)
         sentence_wordword_states = tf.concat([state_fw, state_bw], axis=1)
         print("sentence_wordword_states", sentence_wordword_states.get_shape())
@@ -101,11 +103,12 @@ class RNN(Model):
         states_endings = states_unflat[:, -self.ENDINGS:, :]
         print("states separate", states_sentences.get_shape(), states_endings.get_shape())
 
-        sentence_state = tf.layers.flatten(states_sentences)
-        ending1_state = tf.squeeze(states_endings[:, 0, :], axis=1)
-        ending2_state = tf.squeeze(states_endings[:, 1, :], axis=1)
-        ending1_state = tf.layers.flatten(ending1_state)
-        ending2_state = tf.layers.flatten(ending2_state)
+        sentence_state = tf.layers.flatten(states_sentences[:, -1, :])  # last sentence
+        print("sentence_state", sentence_state.get_shape())
+        ending1_state = tf.layers.flatten(states_endings[:, 0, :])
+        print("ending1_state", ending1_state.get_shape())
+        ending2_state = tf.layers.flatten(states_endings[:, 1, :])
+        print("ending2_state", ending1_state.get_shape())
         return sentence_state, (ending1_state, ending2_state)
 
     def _fc(self, sentence_state: tf.Tensor, ending_states: Tuple[tf.Tensor, tf.Tensor]) -> tf.Tensor:
@@ -156,7 +159,7 @@ class RNN(Model):
 
             with tf.name_scope("optimizer"):
                 optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate)
-                gradients = optimizer.compute_gradients(self.loss)
+                gradients = optimizer.compute_gradients(loss)
                 clipped_gradients = [(tf.clip_by_norm(gradient, self.grad_clip), var) for gradient, var in gradients]
                 training_step = optimizer.apply_gradients(clipped_gradients, global_step=self.global_step)
 

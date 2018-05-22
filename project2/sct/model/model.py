@@ -6,7 +6,6 @@ from typing import Tuple, Dict, Union, List, Any
 from sct.data.datasets import Datasets
 from sct.data.stories import StoriesDataset
 
-from dotmap import DotMap
 import numpy as np
 import tensorflow as tf
 import tqdm
@@ -49,7 +48,7 @@ class Model:
         self.update_metrics = [update_accuracy, update_loss]
 
         summary_writer = tf.contrib.summary.create_file_writer(self.save_dir, flush_millis=5_000)
-        self.summaries = Dict[str, List[tf.Operation]]()
+        self.summaries: Dict[str, List[tf.Operation]] = dict()
         with summary_writer.as_default(), tf.contrib.summary.record_summaries_every_n_global_steps(10):
             self.summaries["train"] = [
                     tf.contrib.summary.scalar("train/loss", update_loss),
@@ -63,12 +62,24 @@ class Model:
                 ]
 
         # Initialize variables
-        self.session.run(tf.initialize_all_variables())
+        self.session.run(tf.global_variables_initializer())
         with summary_writer.as_default():
             tf.contrib.summary.initialize(session=self.session, graph=self.session.graph)
 
-    def __init__(self, *args, threads: int = 1, seed: int = 42, logdir: str = "logs", expname: str = "exp",
+    def __init__(self,
+                 num_sentences: int,
+                 num_words: int,
+                 num_chars: int,
+                 *args,
+                 threads: int = 1,
+                 seed: int = 42,
+                 logdir: str = "logs",
+                 expname: str = "exp",
                  **kwargs) -> None:
+        super().__init__()
+        self.num_sentences = num_sentences
+        self.num_words = num_words
+        self.num_chars = num_chars
         self.save_dir = os.path.join(f"{logdir}", f"{datetime.now().strftime('%Y-%m-%d_%H%M%S')}-{expname}")
 
         # Create an empty graph and a session
@@ -79,7 +90,7 @@ class Model:
                 "inter_op_parallelism_threads": threads,
                 "intra_op_parallelism_threads": threads
         }
-        self.session = tf.Session(graph=graph, config=tf.ConfigProto(*config))
+        self.session = tf.Session(graph=graph, config=tf.ConfigProto(**config))
 
         # Construct the graph
         with self.session.graph.as_default():
@@ -95,19 +106,20 @@ class Model:
         """
         raise NotImplementedError("To be overridden.")
 
-    def _build_feed_dict(self, batch: DotMap[str, Union[np.ndarray, bool]],
+    def _build_feed_dict(self, batch: Dict[str, Union[np.ndarray, bool]],
                          is_training: bool = False) -> Dict[tf.Tensor, Union[np.ndarray, bool]]:
-        assert is_training == batch.is_training
+        assert is_training == batch['is_training']
         return {
-                self.batch_to_sentence_ids: batch.batch_to_sentence_ids,
-                self.batch_to_sentences: batch.batch_to_sentences,
-                self.sentence_to_word_ids: batch.sentence_to_word_ids,
-                self.sentence_to_words: batch.sentence_to_words,
-                self.sentence_lens: batch.sentence_lens,
-                self.word_to_char_ids: batch.word_to_char_ids,
-                self.word_lens: batch.word_lens,
-                self.labels: batch.labels,
-                self.is_training: batch.is_training
+                self.batch_to_sentence_ids: batch['batch_to_sentence_ids'],
+                self.batch_to_sentences: batch['batch_to_sentences'],
+                self.sentence_to_word_ids: batch['sentence_to_word_ids'],
+                self.sentence_to_words: batch['sentence_to_words'],
+                self.sentence_lens: batch['sentence_lens'],
+                self.word_to_char_ids: batch['word_to_char_ids'],
+                # self.word_to_chars: batch['word_to_chars'],
+                self.word_lens: batch['word_lens'],
+                self.labels: batch['labels'],
+                self.is_training: batch['is_training']
         }
 
     @staticmethod
@@ -118,7 +130,7 @@ class Model:
             d[f'{dataset}_{name}'] = str(metric)
         return d
 
-    def train_batch(self, batch: DotMap[str, Union[np.ndarray, bool]]) -> Dict[str, str]:
+    def train_batch(self, batch: Dict[str, Union[np.ndarray, bool]]) -> Dict[str, str]:
         self.session.run(self.reset_metrics)
         fetches = [self.current_metrics, self.training_step, self.summaries["train"]]
         metrics, *_ = self.session.run(fetches, self._build_feed_dict(batch, is_training=True))
@@ -150,7 +162,7 @@ class Model:
 
     def predict_epoch(self, data: StoriesDataset, dataset: str, batch_size: int = 1) -> List[int]:
         self.session.run(self.reset_metrics)
-        predictions = List[int]()
+        predictions: List[int] = []
         self.session.run(self.reset_metrics)
         for batch in data.batch_per_epoch_generator(batch_size, shuffle=False):
             batch_predictions = self.session.run(self.predictions, self._build_feed_dict(batch))

@@ -1,6 +1,5 @@
 import inspect
 import os
-from typing import Any
 
 import numpy as np
 import tensorflow as tf
@@ -23,8 +22,10 @@ def test(network: model_module.Model, dsets: Datasets, batch_size: int = 1, expn
         for p in predictions:
             print(p, file=f)
 
+    # TODO: Proper output formatting
 
-def main(FLAGS: tf.app.flags._FlagValuesWrapper[str, Any]) -> None:
+
+def main(FLAGS: tf.app.flags._FlagValuesWrapper) -> None:
     print("Loading data...")
     preprocessing = None
     # preprocessing = Preprocessing(
@@ -37,7 +38,12 @@ def main(FLAGS: tf.app.flags._FlagValuesWrapper[str, Any]) -> None:
 
     for name, obj in inspect.getmembers(model_module):
         if inspect.isclass(obj) and name == FLAGS.model:
-            network = obj(*FLAGS)
+            vocabularies = dsets.train.vocabularies
+            num_sentences = len(vocabularies.sentence_vocabulary)
+            num_words = len(vocabularies.word_vocabulary)
+            num_chars = len(vocabularies.char_vocabulary)
+            flag_dict = {k: v.value for k, v in {**FLAGS.__flags}.items()}  # TODO: Hack
+            network = obj(num_sentences=num_sentences, num_words=num_words, num_chars=num_chars, **flag_dict)
 
     if network is None:
         raise ValueError(f"Unknown model {FLAGS.model}.")

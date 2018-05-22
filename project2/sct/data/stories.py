@@ -1,6 +1,5 @@
 from typing import Sequence, TypeVar, Tuple, Dict, List, Iterator, Union
 
-from dotmap import DotMap
 import numpy as np
 import pandas as pd
 
@@ -21,27 +20,35 @@ def generate_balanced_permutation(labels: Sequence[T], batch_size: int = 1, shuf
         return np.arange(len(labels))
 
     permutation = np.random.permutation(len(labels))  # shuffle all
-    label_split = Dict[T, List[int]]()  # split by label
+    label_split: Dict[T, List[int]] = dict()  # split by label
     for i, label in enumerate(labels):
         if label not in label_split:
-            label_split[label] = List[int]()
+            label_split[label] = []
         label_split[label].append(permutation[i])
 
     balanced_perm = np.zeros_like(permutation)
     one_label, two_label = label_split.keys()
     ones_ratio = len(label_split[one_label]) / len(labels)  # balance batches by ratio
     for n_batch in range(0, len(labels), batch_size):
-        counts = Dict[T, int]({k: 0 for k in label_split.keys()})
-        for n_sample in range(batch_size):
-            cur_ones_ratio = counts[one_label] / sum(counts.values())
-            if cur_ones_ratio < ones_ratio:
-                chosen_label = one_label
-            elif cur_ones_ratio > ones_ratio:
+        left_elements = min(batch_size, len(labels) - n_batch)
+        counts: Dict[T, int] = {k: 0 for k in label_split.keys()}
+        for n_sample in range(left_elements):
+            if len(label_split[one_label]) == 0:
                 chosen_label = two_label
+            elif len(label_split[two_label]) == 0:
+                chosen_label = one_label
             else:
-                chosen_label = np.random.choice(label_split.keys(), 1)
-            balanced_perm[n_batch * batch_size + n_sample] = label_split[chosen_label].pop()
+                denominator = sum(counts.values())
+                cur_ones_ratio = counts[one_label] / denominator if denominator != 0 else 0
+                if cur_ones_ratio < ones_ratio:
+                    chosen_label = one_label
+                elif cur_ones_ratio > ones_ratio:
+                    chosen_label = two_label
+                else:
+                    chosen_label = np.random.choice(label_split.keys(), 1)
+            balanced_perm[n_batch + n_sample] = label_split[chosen_label].pop()
             counts[chosen_label] += 1
+        # print("ones_ratio", counts[one_label] / sum(counts.values()))
     return balanced_perm
 
 
@@ -52,14 +59,15 @@ class Vocabularies:
         return MissingDict(BASE_VOCAB, default_val=BASE_VOCAB[UNK_TOKEN])
 
     def __init__(self, dataset: Sequence[DatasetRow]) -> None:
-        self.sentence_vocabulary: Dict[Sentence, int] = MissingDict({[]: 0, [UNK_TOKEN]: 1}, default_val=1)
+        self.sentence_vocabulary: Dict[Tuple[Word, ...], int] = MissingDict({(): 0, (UNK_TOKEN,): 1}, default_val=1)
         self.word_vocabulary: Dict[Word, int] = Vocabularies._default_dict()
         self.char_vocabulary: Dict[Char, int] = Vocabularies._default_dict()
 
         for row in dataset:
             for sentence in row:
-                if sentence not in self.sentence_vocabulary:
-                    self.sentence_vocabulary[sentence] = len(self.sentence_vocabulary)
+                tuple_sentence = tuple(sentence)
+                if tuple_sentence not in self.sentence_vocabulary:
+                    self.sentence_vocabulary[tuple_sentence] = len(self.sentence_vocabulary)
                 for word in sentence:
                     if word not in self.word_vocabulary:
                         self.word_vocabulary[word] = len(self.word_vocabulary)
@@ -86,7 +94,7 @@ class NLPData:
         self.sentence_ids: np.ndarray = np.zeros((len(dataset), row_len), dtype=np.int32)
         for i, row in enumerate(dataset):
             assert len(row) == row_len
-            row_sentence_ids = [vocabularies.sentence_vocabulary[sentence] for sentence in row]
+            row_sentence_ids = [vocabularies.sentence_vocabulary[tuple(sentence)] for sentence in row]
             self.sentence_ids[i] = np.asarray(row_sentence_ids, dtype=np.int32)
 
         # sentence_id -> [word_id]
@@ -103,7 +111,12 @@ class NLPData:
             batch_to_sentence_ids: np.ndarray) -> Tuple[Tuple[np.ndarray, np.ndarray], Dict[int, int]]:
         flat_sentence_ids = list(set(idx for sentence in batch_to_sentence_ids for idx in sentence))
         sentence_dict = {k: v for v, k in enumerate(flat_sentence_ids)}
-        batch_to_sentences = np.array(map(lambda idx: sentence_dict[idx], batch_to_sentence_ids), dtype=np.int32)
+
+        batch_to_sentences = np.zeros_like(batch_to_sentence_ids)
+        for i in range(batch_to_sentence_ids.shape[0]):
+            for j in range(batch_to_sentence_ids.shape[1]):
+                batch_to_sentences[i, j] = sentence_dict[batch_to_sentence_ids[i, j]]
+
         return (batch_to_sentence_ids, batch_to_sentences), sentence_dict
 
     @staticmethod
@@ -111,16 +124,16 @@ class NLPData:
                               padding: int = 0) -> Tuple[Tuple[np.ndarray, np.ndarray, np.ndarray], Dict[int, int]]:
         inv_sentence_dict = invert_dict(sentence_dict)
         flat_sentence_ids = [inv_sentence_dict[i] for i in range(len(sentence_dict))]
-        sentence_lens = np.array((len(word_ids[idx]) for idx in flat_sentence_ids), dtype=np.int32)
+        sentence_lens = np.fromiter((len(word_ids[idx]) for idx in flat_sentence_ids), dtype=np.int32)
         max_sentence_len = np.max(sentence_lens)
         sentence_to_word_ids = np.full((len(flat_sentence_ids), max_sentence_len), fill_value=padding, dtype=np.int32)
         sentence_to_words = np.full((len(flat_sentence_ids), max_sentence_len), fill_value=padding, dtype=np.int32)
         unique_word_ids = list(set(word_id for sent_idx in flat_sentence_ids for word_id in word_ids[sent_idx]))
         word_dict = {k: v for v, k in enumerate(unique_word_ids)}
         for i, idx in enumerate(flat_sentence_ids):
-            sentence = word_ids[idx]
-            sentence_to_word_ids[i, :sentence_lens[i]] = np.asarray(sentence)
-            sentence_to_words[i, :sentence_lens[i]] = np.asarray((word_dict[word_id] for word_id in sentence))
+            sentence, length = word_ids[idx], sentence_lens[i]
+            sentence_to_word_ids[i, :length] = np.asarray(sentence)
+            sentence_to_words[i, :length] = np.fromiter((word_dict[word_id] for word_id in sentence), dtype=np.int32)
         return (sentence_to_word_ids, sentence_to_words, sentence_lens), word_dict
 
     def _create_word_tensors(self, sentence_dict: Dict[int, int],
@@ -158,7 +171,7 @@ class StoriesDataset:
     def __init__(self, df: pd.DataFrame, vocabularies: Vocabularies = None) -> None:
         self._len: int = len(df)
         self.story_ids: Sequence[str] = df['storyid'].values
-        self.labels: Sequence[int] = df['labels'].values
+        self.labels: Sequence[int] = df['label'].values
 
         dataset: List[DatasetRow] = self._create_nlp_text_dataset(df)
         del df
@@ -212,7 +225,7 @@ class StoriesDataset:
             labels = next(labels_it)
             story_ids = next(story_ids_it)
 
-            yield DotMap({
+            yield {
                     "batch_to_sentence_ids": batch_to_sentence_ids,
                     "batch_to_sentences": batch_to_sentences,
                     "sentence_to_word_ids": sentence_to_word_ids,
@@ -224,7 +237,7 @@ class StoriesDataset:
                     "labels": labels,
                     "story_ids": story_ids,
                     "is_training": shuffle,
-            })
+            }
 
     def batches_per_epoch(self, batch_size: int = 1, shuffle: bool = True):
         n_batches = self.n_batches(batch_size=batch_size)

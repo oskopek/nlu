@@ -34,9 +34,6 @@ class Preprocessing:
             contractions: bool = True,
             rem_numbers: bool = True,
             punct_squash: bool = True,
-            fix_slang: bool = True,
-            word_squash: int = 3,
-            expl_negations: bool = False,
             rem_stopwords: bool = False,
             stemming: Optional[nltk.stem.StemmerI] = nltk.stem.PorterStemmer(),
             #  lemmatization: Optional[nltk.stem.WordNetLemmatizer] = nltk.stem.WordNetLemmatizer(),
@@ -45,21 +42,18 @@ class Preprocessing:
         self.padding_size = padding_size
         self.methods = [  # line operations
                 (self.standardize, standardize),
-                (self.word_squash, word_squash),
-                (self.fix_slang, fix_slang),
                 (self.contractions, contractions),
                 (self.rem_numbers, rem_numbers),
                 (self.punct_squash, punct_squash),
                 (self.lines_to_matrix, True),
 
                 # matrix operations
-                (self.expl_negations, expl_negations),
                 (self.rem_stopwords, rem_stopwords),
                 (self.stemming, stemming),
                 (self.lemmatization, lemmatization)
         ]
 
-    def transform(self, lines: LinesType, eval: bool = False):  # labels == None => test transformation
+    def transform(self, lines: LinesType, evaluate: bool = False):
         for fn, args in self.methods:
             if args:
                 lines = fn(lines, args)
