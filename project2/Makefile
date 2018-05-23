@@ -14,4 +14,16 @@ check:
 test:
 	python -m pytest tests/
 
-.PHONY: requirements train check test
+job:
+	source ~/git/cil/venv/bin/activate && bsub -W 04:00 -n 4 -R "rusage[mem=2048,ngpus_excl_p=1]" python -m sct.train $(filter-out $@,$(MAKECMDGOALS))
+
+%:
+	@:
+
+status:
+	watch -n 1 bbjobs
+
+output:
+	watch -n 1 bpeek
+
+.PHONY: requirements train check test job bbjobs output
