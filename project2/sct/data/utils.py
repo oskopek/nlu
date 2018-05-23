@@ -1,4 +1,4 @@
-from typing import TypeVar, Optional, Sequence, Dict
+from typing import TypeVar, Optional, Sequence, Dict, List
 
 import numpy as np
 
@@ -32,3 +32,9 @@ def invert_dict(d: Dict[K, V]) -> Dict[V, K]:
 def invert_vocab(vocab: Dict[K, int]) -> Sequence[K]:
     assert sorted(vocab.values()) == np.arange(0, len(vocab))
     return [k for k, _ in sorted(vocab.items(), key=lambda x: x[1])]
+
+
+def create_sentence_indexer(n_sentences: int = 0, n_endings: int = 0) -> List[str]:
+    sentence_indexer = [f"sentence{i+1}" for i in range(n_sentences)]
+    sentence_indexer += [f"ending{i+1}" for i in range(n_endings)]
+    return sentence_indexer

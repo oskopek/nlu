@@ -3,7 +3,7 @@ from typing import Sequence, TypeVar, Tuple, Dict, List, Iterator, Union
 import numpy as np
 import pandas as pd
 
-from .utils import MissingDict, UNK_TOKEN, BASE_VOCAB, invert_dict
+from .utils import MissingDict, UNK_TOKEN, BASE_VOCAB, invert_dict, create_sentence_indexer
 
 T = TypeVar('T')
 Char = str
@@ -188,8 +188,7 @@ class StoriesDataset:
 
     def _create_nlp_text_dataset(self, df: pd.DataFrame) -> List[DatasetRow]:
         # Index into Pandas DataFrame
-        sentence_indexer = [f"sentence{i+1}" for i in range(self.SENTENCES)]
-        sentence_indexer += [f"ending{i+1}" for i in range(self.ENDINGS)]
+        sentence_indexer = create_sentence_indexer(n_sentences=self.SENTENCES, n_endings=self.ENDINGS)
         rows: List[DatasetRow] = []
         for i in range(len(df)):
             row: List[Sentence] = []

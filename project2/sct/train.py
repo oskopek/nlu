@@ -4,9 +4,10 @@ import os
 import numpy as np
 import tensorflow as tf
 
+from . import flags
 from . import model as model_module
 from .data.datasets import Datasets
-from .flags import define_flags
+from .data.preprocessing import Preprocessing
 
 
 def train(network: model_module.Model, dsets: Datasets, batch_size: int = 1, epochs: int = 1) -> None:
@@ -27,10 +28,7 @@ def test(network: model_module.Model, dsets: Datasets, batch_size: int = 1, expn
 
 def main(FLAGS: tf.app.flags._FlagValuesWrapper) -> None:
     print("Loading data...")
-    preprocessing = None
-    # preprocessing = Preprocessing(
-    #     standardize=True,
-    # )
+    preprocessing = Preprocessing(standardize=True,)
     dsets = Datasets(FLAGS.train_file, FLAGS.eval_file, FLAGS.test_file, preprocessing=preprocessing)
 
     print("Initializing network...")
@@ -42,7 +40,7 @@ def main(FLAGS: tf.app.flags._FlagValuesWrapper) -> None:
             num_sentences = len(vocabularies.sentence_vocabulary)
             num_words = len(vocabularies.word_vocabulary)
             num_chars = len(vocabularies.char_vocabulary)
-            flag_dict = {k: v.value for k, v in {**FLAGS.__flags}.items()}  # TODO: Hack
+            flag_dict = {k: v.value for k, v in {**FLAGS.__flags}.items()}  # HACK
             network = obj(num_sentences=num_sentences, num_words=num_words, num_chars=num_chars, **flag_dict)
 
     if network is None:
@@ -57,9 +55,8 @@ def main(FLAGS: tf.app.flags._FlagValuesWrapper) -> None:
 
 
 if __name__ == "__main__":
-    define_flags()
-    flags = tf.app.flags
-    FLAGS = flags.FLAGS
+    flags.define_flags()
+    FLAGS = tf.app.flags.FLAGS
 
     np.random.seed(FLAGS.seed)
     main(FLAGS)

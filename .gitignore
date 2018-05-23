@@ -105,11 +105,13 @@ ENV/
 *.iml
 
 # Data and logs folders
-project?/data/
-project?/outputs/
+data/
+outputs/
 logs/
 save/
 
 # vscode
 .vscode/
 checkpoints/
+
+.pytest_cache/

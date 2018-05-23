@@ -97,7 +97,7 @@ class Datasets:
         Datasets._sample_random_train_endings(df_train)
 
         print("Pre-processing...")
-        if self.preprocessing:  # TODO: Implement pre-processing
+        if self.preprocessing:
             self.preprocessing.transform(df_train, evaluate=False)
             self.preprocessing.transform(df_eval, evaluate=True)
             if self.test_file:

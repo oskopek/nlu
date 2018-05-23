@@ -1,0 +1,9 @@
+matplotlib
+nltk
+numpy
+pandas
+pytest
+seaborn
+tensorflow==1.7.0
+tensorboard==1.7.0
+tqdm
