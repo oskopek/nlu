@@ -9,10 +9,7 @@ from .stories import StoriesDataset
 
 class Datasets:
 
-    def __init__(self,
-                 train_file: str,
-                 eval_file: str,
-                 test_file: str,
+    def __init__(self, train_file: str, eval_file: str, test_file: str,
                  preprocessing: Optional[Preprocessing] = None) -> None:
         self.train_file = train_file
         self.eval_file = eval_file
@@ -53,6 +50,8 @@ class Datasets:
                 })
         return df
 
+    # TODO(oskopek): Sample random train endings per epoch.
+    # TODO(oskopek): Make this function faster.
     @staticmethod
     def _sample_random_train_endings(df: pd.DataFrame) -> None:
         """

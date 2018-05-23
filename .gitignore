@@ -115,3 +115,4 @@ save/
 checkpoints/
 
 .pytest_cache/
+lsf.*

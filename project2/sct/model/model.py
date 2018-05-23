@@ -99,7 +99,8 @@ class Model:
         with self.session.graph.as_default():
             self._placeholders()
             self.predictions, self.loss, self.training_step = self.build_model()
-            self._summaries_and_init()
+            with tf.name_scope("summaries"):
+                self._summaries_and_init()
 
     def build_model(self) -> Tuple[tf.Tensor, tf.Tensor, tf.Operation]:
         """
