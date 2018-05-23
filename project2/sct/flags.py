@@ -26,8 +26,8 @@ def define_flags() -> None:
     flags.DEFINE_integer('seed', 42, 'Random seed')
 
     # Optimization parameters
-    flags.DEFINE_integer('epochs', 1, 'Training epoch count')
-    flags.DEFINE_integer('batch_size', 32, 'Training batch size')
+    flags.DEFINE_integer('epochs', 5, 'Training epoch count')
+    flags.DEFINE_integer('batch_size', 6, 'Training batch size')
     flags.DEFINE_float('learning_rate', 3e-4, 'learning rate')
     flags.DEFINE_float('grad_clip', 10.0, 'Gradient clipped to L2 norm smaller than or equal to.')
 

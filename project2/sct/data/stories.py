@@ -171,7 +171,9 @@ class StoriesDataset:
     def __init__(self, df: pd.DataFrame, vocabularies: Vocabularies = None) -> None:
         self._len: int = len(df)
         self.story_ids: Sequence[str] = df['storyid'].values
-        self.labels: Sequence[int] = df['label'].values
+        self.label_dictionary: Dict[int, int] = {1: 0, 2: 1}
+        self.labels: Sequence[int] = np.fromiter(
+                (self.label_dictionary[label] for label in df['label'].values), dtype=np.int32)
 
         dataset: List[DatasetRow] = self._create_nlp_text_dataset(df)
         del df
@@ -219,7 +221,7 @@ class StoriesDataset:
         for n_batch in range(self.n_batches(batch_size=batch_size)):
             batch_to_sentence_ids, batch_to_sentences, sentence_to_word_ids, sentence_to_words, sentence_lens, \
                 word_to_char_ids, word_to_chars, word_lens = next(sentences_it)
-            assert batch_to_sentence_ids.shape[0] == batch_size
+            assert batch_to_sentence_ids.shape[0] <= batch_size
             assert batch_to_sentences.shape == batch_to_sentence_ids.shape
             labels = next(labels_it)
             story_ids = next(story_ids_it)
@@ -244,4 +246,5 @@ class StoriesDataset:
         return n_batches, batch_generator
 
     def n_batches(self, batch_size: int = 1):
-        return len(self) // batch_size + len(self) % batch_size
+        remainder = 0 if len(self) % batch_size == 0 else 1
+        return len(self) // batch_size + remainder

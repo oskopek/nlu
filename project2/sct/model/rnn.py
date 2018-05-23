@@ -42,7 +42,7 @@ class RNN(Model):
             input_chars = tf.one_hot(self.word_to_char_ids, depth=self.num_chars)
         else:
             char_emb_mat = tf.get_variable("char_emb", shape=[self.num_chars, self.char_embedding])
-            input_chars = tf.nn.embedding_lookup(char_emb_mat, self.word_to_char_ids)
+            input_chars = tf.nn.embedding_lookup(char_emb_mat, ids=self.word_to_char_ids)
         print("input_chars", input_chars.get_shape())
 
         rnn_cell_characters = self._create_cell()
@@ -56,7 +56,9 @@ class RNN(Model):
         input_chars = tf.concat([state_fw, state_bw], axis=1)
         print("input_chars_rnn", input_chars.get_shape())
 
-        input_char_words = tf.nn.embedding_lookup(input_chars, self.sentence_to_words)
+        sentence_words = tf.nn.embedding_lookup(self.sentence_to_words, ids=self.batch_to_sentences)
+        sentence_words = tf.reshape(sentence_words, (self.batch_size * self.TOTAL_SENTENCES, -1))
+        input_char_words = tf.nn.embedding_lookup(input_chars, ids=sentence_words)
         print("input_char_words", input_char_words.get_shape())
         return input_char_words
 
@@ -66,7 +68,7 @@ class RNN(Model):
         print("self.batch_to_sentences", self.batch_to_sentences.get_shape())
         batch_to_sentences = tf.nn.embedding_lookup(self.sentence_to_word_ids, ids=self.batch_to_sentences)
         print("batch_to_sentences", batch_to_sentences.get_shape())
-        self.batch_size = tf.shape(batch_to_sentences)[0]
+
         sentence_to_word_ids = tf.reshape(batch_to_sentences, (self.batch_size * self.TOTAL_SENTENCES, -1))
         print("sentence_to_word_ids", sentence_to_word_ids.get_shape())
 
@@ -75,8 +77,6 @@ class RNN(Model):
         else:
             word_emb_mat = tf.get_variable("word_emb", shape=[self.num_words, self.word_embedding])
             sentence_word_embeddings = tf.nn.embedding_lookup(word_emb_mat, ids=sentence_to_word_ids)
-            # sentence_word_embeddings = tf.layers.dropout(
-            #         sentence_word_embeddings, rate=self.keep_prob, training=self.is_training)
         print("sentence_word_embeddings", sentence_word_embeddings.get_shape())
         return sentence_word_embeddings
 

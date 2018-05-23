@@ -13,6 +13,8 @@ Vocab = Dict[str, int]
 InvVocab = Dict[int, str]
 
 
+# TODO(oskopek): Add support for external vocabularies.
+# TODO(oskopek): Add implementation for the evaluation=True flag.
 class Preprocessing:
     BASE_VOCAB: Dict[str, int] = {PAD_TOKEN: 0, UNK_TOKEN: 1}
 

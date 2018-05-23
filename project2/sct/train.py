@@ -23,7 +23,7 @@ def test(network: model_module.Model, dsets: Datasets, batch_size: int = 1, expn
         for p in predictions:
             print(p, file=f)
 
-    # TODO: Proper output formatting
+    # TODO(oskopek): Proper output formatting.
 
 
 def main(FLAGS: tf.app.flags._FlagValuesWrapper) -> None:

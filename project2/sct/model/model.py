@@ -40,6 +40,9 @@ class Model:
         # [] bool scalar
         self.is_training = tf.placeholder_with_default(False, [], name="is_training")
 
+        # Useful tensors
+        self.batch_size = tf.shape(self.batch_to_sentence_ids)[0]
+
     def _summaries_and_init(self) -> None:
         current_accuracy, update_accuracy = tf.metrics.accuracy(self.labels, self.predictions)
         current_loss, update_loss = tf.metrics.mean(self.loss)
@@ -124,7 +127,7 @@ class Model:
 
     @staticmethod
     def _tqdm_metrics(dataset: str, metrics: List[Any], names: List[str]) -> Dict[str, str]:
-        d = OrderedDict[str, str]()
+        d: Dict[str, str] = OrderedDict()
         assert len(metrics) == len(names)
         for metric, name in zip(metrics, names):
             d[f'{dataset}_{name}'] = str(metric)
@@ -157,8 +160,8 @@ class Model:
         self.session.run(self.reset_metrics)
         for batch in data.batch_per_epoch_generator(batch_size, shuffle=False):
             self.session.run(self.update_metrics, self._build_feed_dict(batch))
-        metrics, _ = self.session.run(self.current_metrics + [self.summaries[dataset]])
-        return metrics
+        returns = self.session.run(self.current_metrics + [self.summaries[dataset]])
+        return returns[:len(self.current_metrics)]  # return current metrics
 
     def predict_epoch(self, data: StoriesDataset, dataset: str, batch_size: int = 1) -> List[int]:
         self.session.run(self.reset_metrics)

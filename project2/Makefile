@@ -1,6 +1,9 @@
 requirements:
 	pip install -r requirements.txt
 
+clean:
+	yapf -ir sct/ tests/
+
 train:
 	python -m sct.train
 

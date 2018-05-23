@@ -24,7 +24,7 @@ class Datasets:
     @staticmethod
     def _read(file: str) -> pd.DataFrame:
         df = pd.read_csv(file)
-        df = df[:200]  # TODO: REMOVE ME
+        df = df[:200]  # TODO(oskopek): REMOVE ME.
         return df
 
     @staticmethod
