@@ -13,7 +13,7 @@ class Datasets:
                  train_file: str,
                  eval_file: str,
                  test_file: str,
-                 preprocessing: Optional[Preprocessing] = Preprocessing()) -> None:
+                 preprocessing: Optional[Preprocessing] = None) -> None:
         self.train_file = train_file
         self.eval_file = eval_file
         self.test_file = test_file
@@ -85,24 +85,24 @@ class Datasets:
                 df.ix[i, ['label']] = 2
 
     def _load(self) -> None:
-        print("Loading data from disk...")
+        print("Loading data from disk...", flush=True)
         df_train = self._read_train(self.train_file)
         df_eval = self._read_eval(self.eval_file)
         df_test = None
         if self.test_file:
             df_test = self._read_eval(self.test_file)
 
-        print("Sampling random train endings...")
+        print("Sampling random train endings...", flush=True)
         Datasets._sample_random_train_endings(df_train)
 
-        print("Pre-processing...")
+        print("Pre-processing...", flush=True)
         if self.preprocessing:
             self.preprocessing.transform(df_train, evaluate=False)
             self.preprocessing.transform(df_eval, evaluate=True)
             if self.test_file:
                 self.preprocessing.transform(df_test, evaluate=True)
 
-        print("Generating TF data...")
+        print("Generating TF data...", flush=True)
         self.train = StoriesDataset(df_train, vocabularies=None)
         self.eval = StoriesDataset(df_eval, vocabularies=self.train.vocabularies)
         if self.test_file:

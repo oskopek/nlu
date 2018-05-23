@@ -109,6 +109,23 @@ class Model:
         """
         raise NotImplementedError("To be overridden.")
 
+    @staticmethod
+    def _tqdm_metrics(dataset: str, metrics: List[Any], names: List[str]) -> Dict[str, str]:
+        d: Dict[str, str] = OrderedDict()
+        assert len(metrics) == len(names)
+        for metric, name in zip(metrics, names):
+            d[f'{dataset}_{name}'] = str(metric)
+        return d
+
+    def _train_metrics(self) -> Dict[str, str]:
+        train_metrics = self.session.run(self.current_metrics)
+        return Model._tqdm_metrics("train", train_metrics, ["acc", "loss"])
+
+    def _eval_metrics(self, data: Datasets, batch_size: int = 1) -> Dict[str, str]:
+        dataset = "eval"
+        eval_metrics = self.evaluate_epoch(data.eval, dataset, batch_size=batch_size)
+        return Model._tqdm_metrics(dataset, eval_metrics, ["acc", "loss"])
+
     def _build_feed_dict(self, batch: Dict[str, Union[np.ndarray, bool]],
                          is_training: bool = False) -> Dict[tf.Tensor, Union[np.ndarray, bool]]:
         assert is_training == batch['is_training']
@@ -125,36 +142,22 @@ class Model:
                 self.is_training: batch['is_training']
         }
 
-    @staticmethod
-    def _tqdm_metrics(dataset: str, metrics: List[Any], names: List[str]) -> Dict[str, str]:
-        d: Dict[str, str] = OrderedDict()
-        assert len(metrics) == len(names)
-        for metric, name in zip(metrics, names):
-            d[f'{dataset}_{name}'] = str(metric)
-        return d
-
-    def train_batch(self, batch: Dict[str, Union[np.ndarray, bool]]) -> Dict[str, str]:
+    def train_batch(self, batch: Dict[str, Union[np.ndarray, bool]]) -> List[Any]:
         self.session.run(self.reset_metrics)
-        fetches = [self.current_metrics, self.training_step, self.summaries["train"]]
-        metrics, *_ = self.session.run(fetches, self._build_feed_dict(batch, is_training=True))
-        return self._tqdm_metrics("train", metrics, ["acc", "loss"])
+        fetches = [self.training_step, self.summaries["train"]]
+        return self.session.run(fetches, self._build_feed_dict(batch, is_training=True))
 
     def train(self, data: Datasets, epochs: int, batch_size: int = 1) -> None:
-
-        def _eval_metrics() -> Dict[str, str]:
-            dataset = "eval"
-            eval_metrics = self.evaluate_epoch(data.eval, dataset, batch_size=batch_size)
-            return self._tqdm_metrics(dataset, eval_metrics, ["acc", "loss"])
-
         epoch_tqdm = tqdm.tqdm(range(epochs), desc="Epochs")
         for epoch in epoch_tqdm:
             batch_count, batch_generator = data.train.batches_per_epoch(batch_size)
             batch_tqdm = tqdm.tqdm(range(batch_count), desc=f"Batches [Epoch {epoch}]")
             for _ in batch_tqdm:
                 batch = next(batch_generator)
-                metrics = self.train_batch(batch)
-                batch_tqdm.set_postfix(metrics)
-            epoch_tqdm.set_postfix(_eval_metrics())
+                self.train_batch(batch)
+                # Can be enabled, but takes up time during training
+                # batch_tqdm.set_postfix(self._train_metrics())
+            epoch_tqdm.set_postfix(self._eval_metrics(data, batch_size=batch_size))
 
     def evaluate_epoch(self, data: StoriesDataset, dataset: str, batch_size: int = 1) -> List[float]:
         self.session.run(self.reset_metrics)

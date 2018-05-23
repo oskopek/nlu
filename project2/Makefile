@@ -24,6 +24,6 @@ status:
 	watch -n 1 bbjobs
 
 output:
-	watch -n 1 bpeek
+	bpeek -f
 
 .PHONY: requirements train check test job bbjobs output

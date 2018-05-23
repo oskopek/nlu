@@ -27,11 +27,11 @@ def test(network: model_module.Model, dsets: Datasets, batch_size: int = 1, expn
 
 
 def main(FLAGS: tf.app.flags._FlagValuesWrapper) -> None:
-    print("Loading data...")
+    print("Loading data...", flush=True)
     preprocessing = Preprocessing(standardize=True,)
     dsets = Datasets(FLAGS.train_file, FLAGS.eval_file, FLAGS.test_file, preprocessing=preprocessing)
 
-    print("Initializing network...")
+    print("Initializing network...", flush=True)
     network = None
 
     for name, obj in inspect.getmembers(model_module):
@@ -47,10 +47,10 @@ def main(FLAGS: tf.app.flags._FlagValuesWrapper) -> None:
         raise ValueError(f"Unknown model {FLAGS.model}.")
 
     if FLAGS.checkpoint_path is None:
-        print("Running network...")
+        print("Running network...", flush=True)
         train(network, dsets, batch_size=FLAGS.batch_size, epochs=FLAGS.epochs)
     else:
-        print("Testing...")
+        print("Testing...", flush=True)
         test(network, dsets, batch_size=FLAGS.batch_size, expname=FLAGS.exp)
 
 
