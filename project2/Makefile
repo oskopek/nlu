@@ -26,4 +26,4 @@ status:
 output:
 	bpeek -f
 
-.PHONY: requirements train check test job bbjobs output
+.PHONY: requirements train check test job status output
