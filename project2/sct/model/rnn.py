@@ -53,6 +53,9 @@ class RNN(Model):
                 sequence_length=self.word_lens,
                 dtype=tf.float32,
                 scope="rnn_chars")
+        if self.rnn_cell == "LSTM":
+            state_fw = tf.concat(state_fw, axis=-1)
+            state_bw = tf.concat(state_bw, axis=-1)
         input_chars = tf.concat([state_fw, state_bw], axis=1)
         print("input_chars_rnn", input_chars.get_shape())
 
@@ -92,12 +95,18 @@ class RNN(Model):
                 inputs=inputs,
                 sequence_length=batch_sentence_lens_flat,
                 dtype=tf.float32)
+        if self.rnn_cell == "LSTM":
+            state_fw = tf.concat(state_fw, axis=-1)
+            state_bw = tf.concat(state_bw, axis=-1)
         sentence_wordword_states = tf.concat([state_fw, state_bw], axis=1)
         print("sentence_wordword_states", sentence_wordword_states.get_shape())
         return sentence_wordword_states
 
     def _story_embeddings(self, sentence_wordword_states: tf.Tensor) -> Tuple[tf.Tensor, Tuple[tf.Tensor, tf.Tensor]]:
-        states_unflat = tf.reshape(sentence_wordword_states, (-1, self.SENTENCES + self.ENDINGS, self.rnn_cell_dim * 2))
+        effective_cell_dim = self.rnn_cell_dim * 2
+        if self.rnn_cell == "LSTM":
+            effective_cell_dim *= 2
+        states_unflat = tf.reshape(sentence_wordword_states, (-1, self.SENTENCES + self.ENDINGS, effective_cell_dim))
         print("states_unflat", states_unflat.get_shape())
         states_sentences = states_unflat[:, :self.SENTENCES, :]
         states_endings = states_unflat[:, -self.ENDINGS:, :]
@@ -143,6 +152,7 @@ class RNN(Model):
 
             with tf.name_scope("sentence_embeddings"):
                 inputs = tf.concat([sentence_charword_states, sentence_word_embeddings], axis=2)
+                print("sentence_rnn_inputs", inputs.get_shape())
                 sentence_wordword_states = self._sentence_rnn(inputs)
 
             with tf.name_scope("story_embeddings"):

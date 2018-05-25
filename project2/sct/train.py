@@ -1,5 +1,6 @@
 import inspect
 import os
+import sys
 
 import numpy as np
 import tensorflow as tf
@@ -52,6 +53,8 @@ def main(FLAGS: tf.app.flags._FlagValuesWrapper) -> None:
     else:
         print("Testing...", flush=True)
         test(network, dsets, batch_size=FLAGS.batch_size, expname=FLAGS.exp)
+    print("End.")
+    print("EndStdErr.", file=sys.stderr)
 
 
 if __name__ == "__main__":
