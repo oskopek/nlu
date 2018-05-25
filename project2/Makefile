@@ -5,7 +5,7 @@ clean:
 	yapf -ir sct/ tests/
 
 train:
-	python -m sct.train
+	python -m sct.train $(filter-out $@,$(MAKECMDGOALS))
 
 check:
 	mypy --ignore-missing-imports .

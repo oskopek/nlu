@@ -1,4 +1,4 @@
-from typing import Optional, List
+from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -51,7 +51,6 @@ class Datasets:
         return df
 
     # TODO(oskopek): Sample random train endings per epoch.
-    # TODO(oskopek): Make this function faster.
     @staticmethod
     def _sample_random_train_endings(df: pd.DataFrame) -> None:
         """
@@ -59,29 +58,32 @@ class Datasets:
         Also shuffles randomly (~Bernoulli(1/2)) endings so that about half of labels is 1 and half is 2.
         """
 
-        def generate_mask(idx: int, indexes_len: int) -> np.ndarray:
-            mask = np.ones(indexes_len)
-            mask[idx] = 0
-            mask /= indexes_len - 1
-            return mask
+        def sample_without_current(length: int) -> np.ndarray:
 
-        def sample_without_current(length: int) -> List[int]:
-            res = []
-            indexes = np.arange(0, length)
-            for idx in indexes:
-                mask = generate_mask(idx, len(indexes))
-                sampled = np.random.choice(indexes, replace=True, p=mask)
-                assert sampled != idx
-                res.append(sampled)
-            return res
+            def has_identical(xs: np.ndarray) -> bool:
+                res: int = np.sum(xs == np.arange(0, len(xs)))
+                return res > 0
+
+            array = np.random.randint(0, length, size=length)
+            while has_identical(array):
+                array = np.random.randint(0, length, size=length)
+            return array
 
         sampled_indexes = sample_without_current(len(df))
+        ending1 = df['ending1'].values
+        ending2 = ending1[sampled_indexes]
+        label = df['label'].values
+
+        # Swap ending1 and ending2
         sampled_swap = np.random.choice([True, False], size=len(df))
-        for i in range(len(df)):
-            df.ix[i, ['ending2']] = df['ending1'][sampled_indexes[i]]
-            if sampled_swap[i]:  # swap ending1 and ending2
-                df.ix[i, ['ending1']], df.ix[i, ['ending2']] = df['ending2'][i], df['ending1'][i]
-                df.ix[i, ['label']] = 2
+        np.copyto(ending2, ending1, where=sampled_swap)
+        ending2_orig = df.ix[sampled_indexes, 'ending1'].values
+        np.copyto(ending1, ending2_orig, where=sampled_swap)
+        np.place(label, sampled_swap, [2])
+
+        df['ending1'] = ending1
+        df['ending2'] = ending2
+        df['label'] = label
 
     def _load(self) -> None:
         print("Loading data from disk...", flush=True)
