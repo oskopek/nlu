@@ -110,7 +110,7 @@ class Model:
             self._summaries_and_init()
 
     def save(self) -> str:
-        return self.saver.save(self.session, self.checkpoint_path)
+        return self.saver.save(self.session, self.checkpoint_path, global_step=self.global_step)
 
     def build_model(self) -> Tuple[tf.Tensor, tf.Tensor, tf.Operation]:
         """

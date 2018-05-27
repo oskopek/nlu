@@ -162,12 +162,12 @@ class Roemmele(Model):
             with summary_writer.as_default(), tf.contrib.summary.record_summaries_every_n_global_steps(50):
                 self.summaries["train"] = [
                         tf.contrib.summary.scalar("train/loss", update_loss),
-                        tf.contrib.summary.scalar("train/train_accuracy", update_accuracy)
+                        tf.contrib.summary.scalar("train/accuracy", update_accuracy)
                 ]
             with summary_writer.as_default(), tf.contrib.summary.always_record_summaries():
                 for dataset in ["eval", "test"]:
                     self.summaries[dataset] = [
-                            tf.contrib.summary.scalar(dataset + "/eval_accuracy", current_eval_accuracy)
+                            tf.contrib.summary.scalar(dataset + "/accuracy", current_eval_accuracy)
                     ]
 
         # Saver
