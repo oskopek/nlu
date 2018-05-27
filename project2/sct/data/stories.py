@@ -27,11 +27,12 @@ def generate_balanced_permutation(labels: Sequence[T], batch_size: int = 1, shuf
         label_split[label].append(permutation[i])
 
     balanced_perm = np.zeros_like(permutation)
-    one_label, two_label = label_split.keys()
+    label_list = list(label_split.keys())
+    one_label, two_label = label_list
     ones_ratio = len(label_split[one_label]) / len(labels)  # balance batches by ratio
     for n_batch in range(0, len(labels), batch_size):
         left_elements = min(batch_size, len(labels) - n_batch)
-        counts: Dict[T, int] = {k: 0 for k in label_split.keys()}
+        counts: Dict[T, int] = {k: 0 for k in label_list}
         for n_sample in range(left_elements):
             if len(label_split[one_label]) == 0:
                 chosen_label = two_label
@@ -45,7 +46,7 @@ def generate_balanced_permutation(labels: Sequence[T], batch_size: int = 1, shuf
                 elif cur_ones_ratio > ones_ratio:
                     chosen_label = two_label
                 else:
-                    chosen_label = np.random.choice(label_split.keys(), 1)
+                    chosen_label = np.random.choice(label_list)
             balanced_perm[n_batch + n_sample] = label_split[chosen_label].pop()
             counts[chosen_label] += 1
         # print("ones_ratio", counts[one_label] / sum(counts.values()))
@@ -164,16 +165,25 @@ class NLPData:
 
 
 class StoriesDataset:
-    SENTENCES: int = 4
-    ENDINGS: int = 2
-    TOTAL_SENT: int = SENTENCES + ENDINGS
 
-    def __init__(self, df: pd.DataFrame, vocabularies: Vocabularies = None) -> None:
+    def __init__(self,
+                 df: pd.DataFrame,
+                 vocabularies: Vocabularies = None,
+                 SENTENCES: int = 4,
+                 ENDINGS: int = 2,
+                 label_dictionary: Dict[int, int] = {
+                         1: 0,
+                         2: 1
+                 }) -> None:
         self._len: int = len(df)
         self.story_ids: Sequence[str] = df['storyid'].values
-        self.label_dictionary: Dict[int, int] = {1: 0, 2: 1}
+        self.label_dictionary: Dict[int, int] = label_dictionary
         self.labels: Sequence[int] = np.fromiter(
                 (self.label_dictionary[label] for label in df['label'].values), dtype=np.int32)
+
+        self.SENTENCES = SENTENCES
+        self.ENDINGS = ENDINGS
+        self.TOTAL_SENT = SENTENCES + ENDINGS
 
         dataset: List[DatasetRow] = self._create_nlp_text_dataset(df)
         del df

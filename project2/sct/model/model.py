@@ -12,9 +12,6 @@ import tqdm
 
 
 class Model:
-    SENTENCES = 4
-    ENDINGS = 2
-    TOTAL_SENTENCES = SENTENCES + ENDINGS
 
     def _placeholders(self) -> None:
         self.global_step = tf.Variable(0, dtype=tf.int64, trainable=False, name="global_step")
@@ -82,6 +79,8 @@ class Model:
                  seed: int = 42,
                  logdir: str = "logs",
                  expname: str = "exp",
+                 SENTENCES: int = 4,
+                 ENDINGS: int = 2,
                  **kwargs) -> None:
         super().__init__()
         self.num_sentences = num_sentences
@@ -89,6 +88,10 @@ class Model:
         self.num_chars = num_chars
         self.save_dir = os.path.join(f"{logdir}", f"{datetime.now().strftime('%Y-%m-%d_%H%M%S')}-{expname}")
         self.checkpoint_path = os.path.join(self.save_dir, "checkpoints", "model.ckpt")
+
+        self.SENTENCES = SENTENCES
+        self.ENDINGS = ENDINGS
+        self.TOTAL_SENTENCES = self.SENTENCES + self.ENDINGS
 
         # Create an empty graph and a session
         graph = tf.Graph()
@@ -171,7 +174,7 @@ class Model:
     def train(self, data: Datasets, epochs: int, batch_size: int = 1) -> None:
         try:
             self._train(data, epochs, batch_size=batch_size)
-        except KeyboardInterrupt as e:
+        except KeyboardInterrupt:
             print("Cancelling training and saving model...")
             print(f"Done: {self.save()}")
 

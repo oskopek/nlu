@@ -17,7 +17,8 @@ def define_flags() -> None:
     flags.DEFINE_string('test_file', None, 'Test data file.')
 
     # Model choice
-    flags.DEFINE_string('model', 'RNN', 'Model class name.')
+    flags.DEFINE_string('model', 'Roemmele', 'Model class name.')
+    flags.DEFINE_integer('roemelle_multiplicative_factor', 1, 'How many negative endings to sample.')
 
     # TF parameters
     flags.DEFINE_boolean("no_gpu", False, 'Disables GPU usage even if a GPU is available')
@@ -26,7 +27,7 @@ def define_flags() -> None:
 
     # Optimization parameters
     flags.DEFINE_integer('epochs', 10, 'Training epoch count')
-    flags.DEFINE_integer('batch_size', 32, 'Training batch size')
+    flags.DEFINE_integer('batch_size', 100, 'Training batch size')
     flags.DEFINE_float('learning_rate', 3e-4, 'learning rate')
     flags.DEFINE_float('grad_clip', 10.0, 'Gradient clipped to L2 norm smaller than or equal to.')
 
@@ -35,8 +36,9 @@ def define_flags() -> None:
     flags.DEFINE_string('f', 'kernel', 'Kernel')
 
     # Other
-    flags.DEFINE_string('rnn_cell', "LSTM", 'RNN cell type.')
-    flags.DEFINE_integer('rnn_cell_dim', 1024, 'RNN cell dimension.')
-    flags.DEFINE_integer('word_embedding', 200, 'word_embedding')
+    flags.DEFINE_string('rnn_cell', "GRU", 'RNN cell type.')
+    flags.DEFINE_integer('rnn_cell_dim', 1000, 'RNN cell dimension.')
+    flags.DEFINE_integer('word_embedding', 300, 'word_embedding')
     flags.DEFINE_integer('char_embedding', 200, 'char_embedding')
+    flags.DEFINE_integer('sentence_embedding', 4800, 'sentence_embedding')
     flags.DEFINE_float('keep_prob', 0.5, 'dropout probability')

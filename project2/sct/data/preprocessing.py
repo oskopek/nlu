@@ -42,7 +42,7 @@ class Preprocessing:
         return df
 
     def _map_df(self, df: pd.DataFrame, fn: Callable[[str], str]) -> pd.DataFrame:
-        return df[self.sentence_indexer].applymap(fn)
+        return df[self.sentence_indexer].applymap(fn)  # ['sentence1', ..., 'ending2']
 
     def _map_words(self, df: pd.DataFrame, fn: Callable[[List[str]], List[str]]) -> pd.DataFrame:
         return self._map_df(df, lambda line: " ".join(fn(line.split())))

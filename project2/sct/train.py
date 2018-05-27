@@ -30,7 +30,12 @@ def test(network: model_module.Model, dsets: Datasets, batch_size: int = 1, expn
 def main(FLAGS: tf.app.flags._FlagValuesWrapper) -> None:
     print("Loading data...", flush=True)
     preprocessing = Preprocessing(standardize=True,)
-    dsets = Datasets(FLAGS.train_file, FLAGS.eval_file, FLAGS.test_file, preprocessing=preprocessing)
+    dsets = Datasets(
+            FLAGS.train_file,
+            FLAGS.eval_file,
+            FLAGS.test_file,
+            preprocessing=preprocessing,
+            roemelle_multiplicative_factor=FLAGS.roemelle_multiplicative_factor)
 
     print("Initializing network...", flush=True)
     network = None

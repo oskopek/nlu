@@ -9,12 +9,17 @@ from .stories import StoriesDataset
 
 class Datasets:
 
-    def __init__(self, train_file: str, eval_file: str, test_file: str,
-                 preprocessing: Optional[Preprocessing] = None) -> None:
+    def __init__(self,
+                 train_file: str,
+                 eval_file: str,
+                 test_file: str,
+                 preprocessing: Optional[Preprocessing] = None,
+                 roemelle_multiplicative_factor: int = 0) -> None:
         self.train_file = train_file
         self.eval_file = eval_file
         self.test_file = test_file
         self.preprocessing = preprocessing
+        self.roemelle_multiplicative_factor = roemelle_multiplicative_factor
 
         self._load()
 
@@ -52,7 +57,7 @@ class Datasets:
 
     # TODO(oskopek): Sample random train endings per epoch.
     @staticmethod
-    def _sample_random_train_endings(df: pd.DataFrame) -> None:
+    def _sample_random_train_endings(df: pd.DataFrame) -> pd.DataFrame:
         """
         Assumes all `ending2`s are empty and all `label`s are 1.
         Also shuffles randomly (~Bernoulli(1/2)) endings so that about half of labels is 1 and half is 2.
@@ -84,6 +89,36 @@ class Datasets:
         df['ending1'] = ending1
         df['ending2'] = ending2
         df['label'] = label
+        return df
+
+    # TODO(oskopek): Sample random train endings per epoch.
+    @staticmethod
+    def _sample_random_train_endings_roemmele(df: pd.DataFrame, multiplicative_factor: int = 4) -> pd.DataFrame:
+        """
+        Assumes all `ending2`s are empty and all `label`s are 1.
+        """
+
+        def sample_without_current(length: int) -> np.ndarray:
+
+            def has_identical(xs: np.ndarray) -> bool:
+                res: int = np.sum(xs == np.arange(0, len(xs)))
+                return res > 0
+
+            array = np.random.randint(0, length, size=length)
+            while has_identical(array):
+                array = np.random.randint(0, length, size=length)
+            return array
+
+        dfs = []
+        for i in range(multiplicative_factor):
+            sampled_indexes = sample_without_current(len(df))
+            df2 = df.copy(deep=True)
+            df2['storyid'] = df2[['storyid']].applymap(lambda idx: f"{idx}_{i}")['storyid'].values
+            df2['ending1'] = df.ix[sampled_indexes, 'ending1'].values
+            df2['label'] = np.zeros_like(df2['label'].values)
+            dfs.append(df2)
+        df = df.append(dfs)
+        return df
 
     def _load(self) -> None:
         print("Loading data from disk...", flush=True)
@@ -94,7 +129,10 @@ class Datasets:
             df_test = self._read_eval(self.test_file)
 
         print("Sampling random train endings...", flush=True)
-        Datasets._sample_random_train_endings(df_train)
+        if self.roemelle_multiplicative_factor is not None:
+            df_train = Datasets._sample_random_train_endings_roemmele(df_train, self.roemelle_multiplicative_factor)
+        else:
+            df_train = Datasets._sample_random_train_endings(df_train)
 
         print("Pre-processing...", flush=True)
         if self.preprocessing:
@@ -104,7 +142,10 @@ class Datasets:
                 self.preprocessing.transform(df_test, evaluate=True)
 
         print("Generating TF data...", flush=True)
-        self.train = StoriesDataset(df_train, vocabularies=None)
+        label_vocab = {1: 0, 2: 1}
+        if self.roemelle_multiplicative_factor is not None:
+            label_vocab = {0: 0, 1: 1}
+        self.train = StoriesDataset(df_train, vocabularies=None, label_dictionary=label_vocab)
         self.eval = StoriesDataset(df_eval, vocabularies=self.train.vocabularies)
         if self.test_file:
             self.test = StoriesDataset(df_test, vocabularies=self.train.vocabularies)
