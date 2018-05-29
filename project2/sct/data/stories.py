@@ -14,6 +14,7 @@ DatasetRow = Tuple[Sentence, ...]
 Dataset = Sequence[DatasetRow]
 
 
+# TODO(oskopek): This might produce last batches unbalanced, which means that the eval error will be skewed?
 def generate_balanced_permutation(labels: Sequence[T], batch_size: int = 1, shuffle: bool = True) -> Sequence[int]:
     """Currently only works for binary labels and an approximately balanced dataset."""
     if not shuffle:

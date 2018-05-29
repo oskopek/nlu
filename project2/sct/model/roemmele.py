@@ -108,9 +108,14 @@ class Roemmele(Model):
                 per_sentence_states = self._word_rnn(sentence_word_embeddings)
 
             with tf.name_scope("split_endings"):
-                sentence_states = tf.slice(per_sentence_states, [0, 0, 0], [-1, self.SENTENCES, -1])
-                ending1_states = tf.slice(per_sentence_states, [0, self.SENTENCES, 0], [-1, 1, -1])
-                ending2_states = tf.slice(per_sentence_states, [0, self.SENTENCES + 1, 0], [-1, 1, -1])
+                sentence_states = per_sentence_states[:, :self.SENTENCES, :]
+                print("sentence_states", sentence_states.get_shape())
+                ending1_states = per_sentence_states[:, self.SENTENCES + 0, :]
+                ending1_states = tf.expand_dims(ending1_states, axis=1)
+                print("ending1_states", ending1_states.get_shape())
+                ending2_states = per_sentence_states[:, self.SENTENCES + 1, :]
+                ending2_states = tf.expand_dims(ending2_states, axis=1)
+                print("ending2_states", ending2_states.get_shape())
                 ending1_states = tf.concat([sentence_states, ending1_states], axis=1)
                 ending2_states = tf.concat([sentence_states, ending2_states], axis=1)
 
@@ -135,8 +140,7 @@ class Roemmele(Model):
                 self.train_predictions = tf.reshape(ending1_output, (-1,))
 
             with tf.name_scope("loss"):
-                loss = tf.losses.sigmoid_cross_entropy(
-                        self.labels, self.train_predictions, reduction=tf.losses.Reduction.SUM_BY_NONZERO_WEIGHTS)
+                loss = tf.losses.sigmoid_cross_entropy(multi_class_labels=self.labels, logits=self.train_predictions)
 
             with tf.name_scope("optimizer"):
                 optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate)
@@ -181,6 +185,6 @@ class Roemmele(Model):
     def evaluate_epoch(self, data: StoriesDataset, dataset: str, batch_size: int = 1) -> List[float]:
         self.session.run(self.reset_metrics)
         for batch in data.batch_per_epoch_generator(batch_size, shuffle=False):
-            self.session.run(self.update_metrics + self.update_eval_metrics, self._build_feed_dict(batch))
-        returns = self.session.run(self.current_metrics + [self.summaries[dataset]])
-        return returns[:len(self.current_metrics)]  # return current metrics
+            self.session.run(self.update_eval_metrics, self._build_feed_dict(batch))
+        returns = self.session.run(self.current_eval_metrics + [self.summaries[dataset]])
+        return returns[:len(self.current_eval_metrics)]  # return current metrics

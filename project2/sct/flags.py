@@ -18,7 +18,7 @@ def define_flags() -> None:
 
     # Model choice
     flags.DEFINE_string('model', 'Roemmele', 'Model class name.')
-    flags.DEFINE_integer('roemelle_multiplicative_factor', 1, 'How many negative endings to sample.')
+    flags.DEFINE_integer('roemmele_multiplicative_factor', 6, 'How many negative endings to sample.')
 
     # TF parameters
     flags.DEFINE_boolean("no_gpu", False, 'Disables GPU usage even if a GPU is available')

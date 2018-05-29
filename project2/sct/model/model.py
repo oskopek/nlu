@@ -135,7 +135,7 @@ class Model:
     def _eval_metrics(self, data: Datasets, batch_size: int = 1) -> Dict[str, str]:
         dataset = "eval"
         eval_metrics = self.evaluate_epoch(data.eval, dataset, batch_size=batch_size)
-        return Model._tqdm_metrics(dataset, eval_metrics, ["acc", "loss"])
+        return Model._tqdm_metrics(dataset, eval_metrics, ["acc"])
 
     def _build_feed_dict(self, batch: Dict[str, Union[np.ndarray, bool]],
                          is_training: bool = False) -> Dict[tf.Tensor, Union[np.ndarray, bool]]:
@@ -168,8 +168,8 @@ class Model:
                         self.train_batch(batch)
                         # Can be enabled, but takes up time during training
                         # batch_tqdm.set_postfix(self._train_metrics())
-                epoch_tqdm.set_postfix(self._eval_metrics(data, batch_size=batch_size))
                 self.save()
+                epoch_tqdm.set_postfix(self._eval_metrics(data, batch_size=batch_size))
 
     def train(self, data: Datasets, epochs: int, batch_size: int = 1) -> None:
         try:

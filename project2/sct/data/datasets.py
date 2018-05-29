@@ -14,12 +14,12 @@ class Datasets:
                  eval_file: str,
                  test_file: str,
                  preprocessing: Optional[Preprocessing] = None,
-                 roemelle_multiplicative_factor: int = 0) -> None:
+                 roemmele_multiplicative_factor: int = 0) -> None:
         self.train_file = train_file
         self.eval_file = eval_file
         self.test_file = test_file
         self.preprocessing = preprocessing
-        self.roemelle_multiplicative_factor = roemelle_multiplicative_factor
+        self.roemmele_multiplicative_factor = roemmele_multiplicative_factor
 
         self._load()
 
@@ -129,9 +129,11 @@ class Datasets:
             df_test = self._read_eval(self.test_file)
 
         print("Sampling random train endings...", flush=True)
-        if self.roemelle_multiplicative_factor is not None:
-            df_train = Datasets._sample_random_train_endings_roemmele(df_train, self.roemelle_multiplicative_factor)
+        if self.roemmele_multiplicative_factor is not None:
+            label_vocab = {0: 0, 1: 1}
+            df_train = Datasets._sample_random_train_endings_roemmele(df_train, self.roemmele_multiplicative_factor)
         else:
+            label_vocab = {1: 0, 2: 1}
             df_train = Datasets._sample_random_train_endings(df_train)
 
         print("Pre-processing...", flush=True)
@@ -142,9 +144,6 @@ class Datasets:
                 self.preprocessing.transform(df_test, evaluate=True)
 
         print("Generating TF data...", flush=True)
-        label_vocab = {1: 0, 2: 1}
-        if self.roemelle_multiplicative_factor is not None:
-            label_vocab = {0: 0, 1: 1}
         self.train = StoriesDataset(df_train, vocabularies=None, label_dictionary=label_vocab)
         self.eval = StoriesDataset(df_eval, vocabularies=self.train.vocabularies)
         if self.test_file:
