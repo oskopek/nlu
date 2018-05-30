@@ -5,7 +5,7 @@ from typing import Any, Callable, List, Tuple, Dict, Optional, Union, Counter
 import nltk
 import pandas as pd
 
-from .utils import MissingDict, PAD_TOKEN, UNK_TOKEN
+from .utils import MissingDict, PAD_TOKEN, UNK_TOKEN, create_sentence_indexer
 
 ArgsType = Any
 PreprocessingMethod = Callable[[pd.DataFrame, ArgsType, bool], pd.DataFrame]
@@ -27,8 +27,13 @@ class Preprocessing:
                  stemming: Optional[nltk.stem.StemmerI] = None,
                  lemmatization: Optional[nltk.stem.WordNetLemmatizer] = None,
                  cut_size: Optional[int] = None,
-                 sentence_indexer: List[str] = list()) -> None:
-        self.sentence_indexer = sentence_indexer
+                 sentence_indexer: Optional[List[str]] = None) -> None:
+
+        if sentence_indexer is None:
+            self.sentence_indexer: List[str] = create_sentence_indexer(4, 2)
+        else:
+            self.sentence_indexer: List[str] = sentence_indexer
+
         self.methods: List[Tuple[PreprocessingMethod, ArgsType]] = [
                 (self._standardize, standardize), (self._contractions, contractions), (self._rem_numbers, rem_numbers),
                 (self._punct_squash, punct_squash), (self._rem_stopwords, rem_stopwords), (self._stemming, stemming),
