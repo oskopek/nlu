@@ -42,7 +42,8 @@ class Preprocessing:
         return df
 
     def _map_df(self, df: pd.DataFrame, fn: Callable[[str], str]) -> pd.DataFrame:
-        return df[self.sentence_indexer].applymap(fn)  # ['sentence1', ..., 'ending2']
+        df[self.sentence_indexer] = df[self.sentence_indexer].applymap(fn)  # ['sentence1', ..., 'ending2']
+        return df
 
     def _map_words(self, df: pd.DataFrame, fn: Callable[[List[str]], List[str]]) -> pd.DataFrame:
         return self._map_df(df, lambda line: " ".join(fn(line.split())))
@@ -73,8 +74,7 @@ class Preprocessing:
         return self._map_df(df, contractions)
 
     def _standardize(self, df: pd.DataFrame, args: ArgsType, evaluate: bool = False):
-        df = self._map_df(df, lambda line: ' '.join(nltk.word_tokenize(line)))
-        return self._map_words(df, lambda words: [word.strip() for word in words])
+        return self._map_df(df, lambda line: ' '.join(nltk.word_tokenize(line)))
 
     def _rem_numbers(self, df: pd.DataFrame, args: ArgsType, evaluate: bool = False):
         re_map = [
