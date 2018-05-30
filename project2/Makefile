@@ -15,7 +15,7 @@ test:
 	python -m pytest tests/
 
 job:
-	source ~/git/cil/venv/bin/activate && bsub -W 04:00 -n 4 -R "rusage[mem=2048,ngpus_excl_p=1]" python -m sct.train $(filter-out $@,$(MAKECMDGOALS))
+	bsub -W 04:00 -n 4 -R "rusage[mem=2048,ngpus_excl_p=1]" python -m sct.train $(filter-out $@,$(MAKECMDGOALS))
 
 %:
 	@:

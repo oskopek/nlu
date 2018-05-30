@@ -28,7 +28,7 @@ def define_flags() -> None:
     # Optimization parameters
     flags.DEFINE_integer('epochs', 10, 'Training epoch count')
     flags.DEFINE_integer('batch_size', 100, 'Training batch size')
-    flags.DEFINE_float('learning_rate', 3e-4, 'learning rate')
+    flags.DEFINE_float('learning_rate', 1e-3, 'learning rate')
     flags.DEFINE_float('grad_clip', 10.0, 'Gradient clipped to L2 norm smaller than or equal to.')
 
     # Jupyter notebook params
@@ -37,7 +37,7 @@ def define_flags() -> None:
 
     # Other
     flags.DEFINE_string('rnn_cell', "GRU", 'RNN cell type.')
-    flags.DEFINE_integer('rnn_cell_dim', 100, 'RNN cell dimension.')
+    flags.DEFINE_integer('rnn_cell_dim', 1000, 'RNN cell dimension.')
     flags.DEFINE_integer('word_embedding', 300, 'word_embedding')
     flags.DEFINE_integer('char_embedding', 200, 'char_embedding')
     flags.DEFINE_integer('sentence_embedding', 4800, 'sentence_embedding')

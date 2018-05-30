@@ -21,38 +21,40 @@ def generate_balanced_permutation(labels: Sequence[T], batch_size: int = 1, shuf
         return np.arange(len(labels))
 
     permutation = np.random.permutation(len(labels))  # shuffle all
-    label_split: Dict[T, List[int]] = dict()  # split by label
-    for i, label in enumerate(labels):
-        if label not in label_split:
-            label_split[label] = []
-        label_split[label].append(permutation[i])
+    return permutation
+    """
+        label_split: Dict[T, List[int]] = dict()  # split by label
+        for i, label in enumerate(labels):
+            if label not in label_split:
+                label_split[label] = []
+            label_split[label].append(permutation[i])
 
-    balanced_perm = np.zeros_like(permutation)
-    label_list = list(label_split.keys())
-    one_label, two_label = label_list
-    ones_ratio = len(label_split[one_label]) / len(labels)  # balance batches by ratio
-    for n_batch in range(0, len(labels), batch_size):
-        left_elements = min(batch_size, len(labels) - n_batch)
-        counts: Dict[T, int] = {k: 0 for k in label_list}
-        for n_sample in range(left_elements):
-            if len(label_split[one_label]) == 0:
-                chosen_label = two_label
-            elif len(label_split[two_label]) == 0:
-                chosen_label = one_label
-            else:
-                denominator = sum(counts.values())
-                cur_ones_ratio = counts[one_label] / denominator if denominator != 0 else 0
-                if cur_ones_ratio < ones_ratio:
-                    chosen_label = one_label
-                elif cur_ones_ratio > ones_ratio:
+        balanced_perm = np.zeros_like(permutation)
+        label_list = list(label_split.keys())
+        one_label, two_label = label_list
+        ones_ratio = len(label_split[one_label]) / len(labels)  # balance batches by ratio
+        for n_batch in range(0, len(labels), batch_size):
+            left_elements = min(batch_size, len(labels) - n_batch)
+            counts: Dict[T, int] = {k: 0 for k in label_list}
+            for n_sample in range(left_elements):
+                if len(label_split[one_label]) == 0:
                     chosen_label = two_label
+                elif len(label_split[two_label]) == 0:
+                    chosen_label = one_label
                 else:
-                    chosen_label = np.random.choice(label_list)
-            balanced_perm[n_batch + n_sample] = label_split[chosen_label].pop()
-            counts[chosen_label] += 1
-        # print("ones_ratio", counts[one_label] / sum(counts.values()))
-    return balanced_perm
-
+                    denominator = sum(counts.values())
+                    cur_ones_ratio = counts[one_label] / denominator if denominator != 0 else 0
+                    if cur_ones_ratio < ones_ratio:
+                        chosen_label = one_label
+                    elif cur_ones_ratio > ones_ratio:
+                        chosen_label = two_label
+                    else:
+                        chosen_label = np.random.choice(label_list)
+                balanced_perm[n_batch + n_sample] = label_split[chosen_label].pop()
+                counts[chosen_label] += 1
+            # print("ones_ratio", counts[one_label] / sum(counts.values()))
+        return balanced_perm
+    """
 
 class Vocabularies:
     WORD_DIM = 300
@@ -82,9 +84,13 @@ class Vocabularies:
         from gensim.models import KeyedVectors
         print("Loading w2v embeddings")
         word_embeddings = KeyedVectors.load_word2vec_format('data/w2vGoogleNews.bin', binary=True)
+        words_missed = 0
         for word, word_index in self.word_vocabulary.items():
             if word in word_embeddings:
                 self.we_matrix[word_index] = word_embeddings[word]
+            else:
+                words_missed += 1
+        print("Missed %d words from word2vec embeddings." % words_missed)
 
 class NLPData:
 

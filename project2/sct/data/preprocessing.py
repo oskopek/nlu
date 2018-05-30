@@ -73,7 +73,8 @@ class Preprocessing:
         return self._map_df(df, contractions)
 
     def _standardize(self, df: pd.DataFrame, args: ArgsType, evaluate: bool = False):
-        return self._map_words(df, lambda words: [word.strip().lower() for word in words])
+        df = self._map_df(df, lambda line: ' '.join(nltk.word_tokenize(line)))
+        return self._map_words(df, lambda words: [word.strip() for word in words])
 
     def _rem_numbers(self, df: pd.DataFrame, args: ArgsType, evaluate: bool = False):
         re_map = [

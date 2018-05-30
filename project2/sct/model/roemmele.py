@@ -30,11 +30,11 @@ class Roemmele(Model):
         # Call super last, because our build_model method probably needs above initialization to happen first
         super().__init__(*args, **kwargs)
 
-    def _create_cell(self, rnn_cell_dim: int, name: str = None, reuse: bool = False) -> tf.nn.rnn_cell.RNNCell:
+    def _create_cell(self, rnn_cell_dim: int, name: str = None) -> tf.nn.rnn_cell.RNNCell:
         if self.rnn_cell == "LSTM":
-            return tf.nn.rnn_cell.LSTMCell(rnn_cell_dim, name=name, reuse=reuse)
+            return tf.nn.rnn_cell.LSTMCell(rnn_cell_dim, name=name)
         elif self.rnn_cell == "GRU":
-            return tf.nn.rnn_cell.GRUCell(rnn_cell_dim, name=name, reuse=reuse)
+            return tf.nn.rnn_cell.GRUCell(rnn_cell_dim, name=name)
         else:
             raise ValueError("Unknown rnn_cell {}".format(self.rnn_cell))
 
@@ -82,13 +82,13 @@ class Roemmele(Model):
         print("per_sentence_states", state.get_shape())
         return state
 
-    def _sentence_rnn(self, per_sentence_states: tf.Tensor, reuse: bool = False) -> tf.Tensor:
+    def _sentence_rnn(self, per_sentence_states: tf.Tensor) -> tf.Tensor:
         assert len(per_sentence_states.get_shape()) == 3
         assert per_sentence_states.get_shape()[1] == self.TOTAL_SENTENCES - 1
         # Create the cell
-        rnn_cell_sentences = self._create_cell(self.rnn_cell_dim, name='sentence_cell', reuse=reuse)
+        rnn_cell_sentences = self._create_cell(self.rnn_cell_dim, name='sentence_cell')
 
-        _, state = tf.nn.dynamic_rnn(cell=rnn_cell_sentences, inputs=per_sentence_states, dtype=tf.float32)
+        _, state = tf.nn.static_rnn(cell=rnn_cell_sentences, inputs=tf.unstack(per_sentence_states, axis=1), dtype=tf.float32)
         if self.rnn_cell == "LSTM":
             state = state[0]  # c_state
         print("per_story_states", state.get_shape())
@@ -125,27 +125,28 @@ class Roemmele(Model):
                 with tf.name_scope("sentence_rnn"):
                     per_story_states = self._sentence_rnn(ending1_states)
                 with tf.name_scope("fc"):
-                    ending1_output = self._fc(per_story_states)
+                    self.ending1_output = self._fc(per_story_states)
 
             with tf.variable_scope("ending", reuse=True):
                 with tf.name_scope("sentence_rnn"):
                     per_story_states = self._sentence_rnn(ending2_states)
                 with tf.name_scope("fc"):
-                    ending2_output = self._fc(per_story_states)
+                    self.ending2_output = self._fc(per_story_states)
 
             with tf.name_scope("eval_predictions"):
-                endings = tf.concat([ending1_output, ending2_output], axis=1)
-                eval_predictions = tf.reshape(tf.argmax(endings, axis=1), (-1,))
-                eval_predictions = tf.cast(eval_predictions, dtype=tf.int32)
+                endings = tf.concat([self.ending1_output, self.ending2_output], axis=1)
+                eval_predictions = tf.to_int32(tf.argmax(endings, axis=1))
 
             with tf.name_scope("train_predictions"):
-                self.train_predictions = tf.reshape(ending1_output, (-1,))
+                self.train_logits = tf.squeeze(self.ending1_output, axis=[1])
+                self.train_probs = tf.sigmoid(self.train_logits)
+                self.train_predictions = tf.to_int32(tf.round(self.train_probs))
 
             with tf.name_scope("loss"):
-                loss = tf.losses.sigmoid_cross_entropy(multi_class_labels=self.labels, logits=self.train_predictions)
+                loss = tf.losses.sigmoid_cross_entropy(multi_class_labels=self.labels, logits=self.train_logits)
 
             with tf.name_scope("optimizer"):
-                optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate)
+                optimizer = tf.train.RMSPropOptimizer(learning_rate=self.learning_rate)
                 gradients = optimizer.compute_gradients(loss)
                 clipped_gradients = [(tf.clip_by_norm(gradient, self.grad_clip), var) for gradient, var in gradients]
                 training_step = optimizer.apply_gradients(clipped_gradients, global_step=self.global_step)
@@ -161,12 +162,15 @@ class Roemmele(Model):
             self.current_metrics = [current_accuracy, current_loss]
             self.update_metrics = [update_accuracy, update_loss]
             self.current_eval_metrics = [current_eval_accuracy]
-            self.update_eval_metrics = [update_eval_accuracy]
+            eval_histograms = [tf.contrib.summary.histogram("eval/activations1", tf.sigmoid(self.ending1_output)),
+                            tf.contrib.summary.histogram("eval/activations2", tf.sigmoid(self.ending2_output))]
+            self.update_eval_metrics = [update_eval_accuracy] + eval_histograms
 
             summary_writer = tf.contrib.summary.create_file_writer(self.save_dir, flush_millis=10_000)
             self.summaries: Dict[str, List[tf.Operation]] = dict()
             with summary_writer.as_default(), tf.contrib.summary.record_summaries_every_n_global_steps(50):
                 self.summaries["train"] = [
+                        tf.contrib.summary.histogram("train/activations", self.train_probs),
                         tf.contrib.summary.scalar("train/loss", update_loss),
                         tf.contrib.summary.scalar("train/accuracy", update_accuracy)
                 ]
