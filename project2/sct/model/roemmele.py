@@ -48,7 +48,9 @@ class Roemmele(Model):
         if self.word_embedding == -1:
             sentence_word_embeddings = tf.one_hot(batch_to_sentences, self.num_words)
         else:
-            word_emb_mat = tf.get_variable("word_emb", shape=[self.num_words, self.word_embedding])
+            self.pretrained_embeddings = tf.placeholder(tf.float32, [self.num_words, self.word_embedding])
+            word_emb_mat = tf.get_variable("word_emb", shape=[self.num_words, self.word_embedding], trainable=False)
+            self.assign_pretrained_we = word_emb_mat.assign(self.pretrained_embeddings)
             sentence_word_embeddings = tf.nn.embedding_lookup(word_emb_mat, ids=batch_to_sentences)
         print("sentence_word_embeddings", sentence_word_embeddings.get_shape())
         return sentence_word_embeddings
@@ -83,7 +85,6 @@ class Roemmele(Model):
     def _sentence_rnn(self, per_sentence_states: tf.Tensor, reuse: bool = False) -> tf.Tensor:
         assert len(per_sentence_states.get_shape()) == 3
         assert per_sentence_states.get_shape()[1] == self.TOTAL_SENTENCES - 1
-        assert per_sentence_states.get_shape()[2] == self.sentence_embedding
         # Create the cell
         rnn_cell_sentences = self._create_cell(self.rnn_cell_dim, name='sentence_cell', reuse=reuse)
 
@@ -105,7 +106,8 @@ class Roemmele(Model):
                 sentence_word_embeddings = self._word_embeddings()
 
             with tf.variable_scope("word_rnn"):
-                per_sentence_states = self._word_rnn(sentence_word_embeddings)
+                # per_sentence_states = self._word_rnn(sentence_word_embeddings)
+                per_sentence_states = tf.reduce_mean(sentence_word_embeddings, axis=2)
 
             with tf.name_scope("split_endings"):
                 sentence_states = per_sentence_states[:, :self.SENTENCES, :]

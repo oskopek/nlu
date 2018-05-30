@@ -55,6 +55,7 @@ def generate_balanced_permutation(labels: Sequence[T], batch_size: int = 1, shuf
 
 
 class Vocabularies:
+    WORD_DIM = 300
 
     @staticmethod
     def _default_dict() -> MissingDict[str, int]:
@@ -77,6 +78,13 @@ class Vocabularies:
                         if char not in self.char_vocabulary:
                             self.char_vocabulary[char] = len(self.char_vocabulary)
 
+        self.we_matrix = np.random.normal(size=(len(self.word_vocabulary), self.WORD_DIM))
+        from gensim.models import KeyedVectors
+        print("Loading w2v embeddings")
+        word_embeddings = KeyedVectors.load_word2vec_format('data/w2vGoogleNews.bin', binary=True)
+        for word, word_index in self.word_vocabulary.items():
+            if word in word_embeddings:
+                self.we_matrix[word_index] = word_embeddings[word]
 
 class NLPData:
 

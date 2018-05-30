@@ -37,7 +37,7 @@ def define_flags() -> None:
 
     # Other
     flags.DEFINE_string('rnn_cell', "GRU", 'RNN cell type.')
-    flags.DEFINE_integer('rnn_cell_dim', 1000, 'RNN cell dimension.')
+    flags.DEFINE_integer('rnn_cell_dim', 100, 'RNN cell dimension.')
     flags.DEFINE_integer('word_embedding', 300, 'word_embedding')
     flags.DEFINE_integer('char_embedding', 200, 'char_embedding')
     flags.DEFINE_integer('sentence_embedding', 4800, 'sentence_embedding')

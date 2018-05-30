@@ -159,6 +159,8 @@ class Model:
         return self.session.run(fetches, self._build_feed_dict(batch, is_training=True))
 
     def _train(self, data: Datasets, epochs: int, batch_size: int = 1) -> None:
+        if hasattr(self, 'assign_pretrained_we'):
+            self.session.run(self.assign_pretrained_we, feed_dict={self.pretrained_embeddings: data.train.vocabularies.we_matrix})
         with tqdm.tqdm(range(epochs), desc="Epochs") as epoch_tqdm:
             for epoch in epoch_tqdm:
                 batch_count, batch_generator = data.train.batches_per_epoch(batch_size)
