@@ -1,9 +1,12 @@
+from collections import OrderedDict
 from typing import Sequence, TypeVar, Tuple, Dict, List, Iterator, Union
 
 import numpy as np
 import pandas as pd
 
 from .utils import MissingDict, UNK_TOKEN, BASE_VOCAB, invert_dict, create_sentence_indexer
+
+from .skip_thoughts.encoder_manager import EncoderManager
 
 T = TypeVar('T')
 Char = str
@@ -17,9 +20,8 @@ Dataset = Sequence[DatasetRow]
 def generate_permutation(labels: Sequence[T], shuffle: bool = True) -> Sequence[int]:
     if not shuffle:
         return np.arange(len(labels))
-
-    permutation = np.random.permutation(len(labels))  # shuffle all
-    return permutation
+    else:
+        return np.random.permutation(len(labels))
 
 
 # TODO(oskopek): This might produce last batches unbalanced, which means that the eval error will be skewed?
@@ -197,7 +199,6 @@ class StoriesDataset:
 
     def __init__(self,
                  df: pd.DataFrame,
-                 vocabularies: Vocabularies = None,
                  SENTENCES: int = 4,
                  ENDINGS: int = 2,
                  label_dictionary: Dict[int, int] = {
@@ -216,6 +217,38 @@ class StoriesDataset:
         self.ENDINGS = ENDINGS
         self.TOTAL_SENT = SENTENCES + ENDINGS
 
+    def __len__(self) -> int:
+        return self._len
+
+    @staticmethod
+    def _sequence_batch_iterator(seq: Sequence[T], permutation: Sequence[int],
+                                 batch_size: int = 1) -> Iterator[Sequence[T]]:
+        for i in range(0, len(seq), batch_size):
+            batch = list()
+            for idx in permutation[i:i + batch_size]:
+                batch.append(seq[idx])
+            yield batch
+
+    def batch_per_epoch_generator(self, batch_size: int = 1,
+                                  shuffle: bool = True) -> Iterator[Dict[str, Union[np.ndarray, bool]]]:
+        """To be overridden."""
+        pass
+
+    def batches_per_epoch(self, batch_size: int = 1, shuffle: bool = True):
+        n_batches = self.n_batches(batch_size=batch_size)
+        batch_generator = self.batch_per_epoch_generator(batch_size=batch_size, shuffle=shuffle)
+        return n_batches, batch_generator
+
+    def n_batches(self, batch_size: int = 1):
+        remainder = 0 if len(self) % batch_size == 0 else 1
+        return len(self) // batch_size + remainder
+
+
+class NLPStoriesDataset(StoriesDataset):
+
+    def __init__(self, df: pd.DataFrame, *args, vocabularies: Vocabularies = None, **kwargs) -> None:
+        super().__init__(df, *args, **kwargs)
+
         dataset: List[DatasetRow] = self._create_nlp_text_dataset(df)
         del df
 
@@ -225,9 +258,6 @@ class StoriesDataset:
             self.vocabularies = vocabularies
 
         self.sentences: NLPData = NLPData(dataset, vocabularies=self.vocabularies)
-
-    def __len__(self) -> int:
-        return self._len
 
     def _create_nlp_text_dataset(self, df: pd.DataFrame) -> List[DatasetRow]:
         # Index into Pandas DataFrame
@@ -244,15 +274,6 @@ class StoriesDataset:
             rows.append(row_tuple)
         return rows
 
-    @staticmethod
-    def _sequence_batch_iterator(seq: Sequence[T], permutation: Sequence[int],
-                                 batch_size: int = 1) -> Iterator[Sequence[T]]:
-        for i in range(0, len(seq), batch_size):
-            batch = list()
-            for idx in permutation[i:i + batch_size]:
-                batch.append(seq[idx])
-            yield batch
-
     def batch_per_epoch_generator(self, batch_size: int = 1,
                                   shuffle: bool = True) -> Iterator[Dict[str, Union[np.ndarray, bool]]]:
         if self.balanced_batches:
@@ -263,13 +284,12 @@ class StoriesDataset:
         labels_it = StoriesDataset._sequence_batch_iterator(self.labels, permutation, batch_size=batch_size)
         story_ids_it = StoriesDataset._sequence_batch_iterator(self.story_ids, permutation, batch_size=batch_size)
         for n_batch in range(self.n_batches(batch_size=batch_size)):
+            labels = next(labels_it)
+            story_ids = next(story_ids_it)
             batch_to_sentence_ids, batch_to_sentences, sentence_to_word_ids, sentence_to_words, sentence_lens, \
                 word_to_char_ids, word_to_chars, word_lens = next(sentences_it)
             assert batch_to_sentence_ids.shape[0] <= batch_size
             assert batch_to_sentences.shape == batch_to_sentence_ids.shape
-            labels = next(labels_it)
-            story_ids = next(story_ids_it)
-
             yield {
                     "batch_to_sentence_ids": batch_to_sentence_ids,
                     "batch_to_sentences": batch_to_sentences,
@@ -284,11 +304,52 @@ class StoriesDataset:
                     "is_training": shuffle,
             }
 
-    def batches_per_epoch(self, batch_size: int = 1, shuffle: bool = True):
-        n_batches = self.n_batches(batch_size=batch_size)
-        batch_generator = self.batch_per_epoch_generator(batch_size=batch_size, shuffle=shuffle)
-        return n_batches, batch_generator
 
-    def n_batches(self, batch_size: int = 1):
-        remainder = 0 if len(self) % batch_size == 0 else 1
-        return len(self) // batch_size + remainder
+class SkipThoughtStoriesDataset(StoriesDataset):
+
+    def __init__(self, df: pd.DataFrame, encoder: EncoderManager, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.encoder = encoder
+        sentence_idx = create_sentence_indexer(self.SENTENCES, self.ENDINGS)
+
+        print("Encoding sentence embeddings...", flush=True)
+        self.mat = np.zeros((len(df), self.TOTAL_SENT), dtype=np.int32)
+        s_vocab: Dict[str, int] = OrderedDict()
+        m = df[sentence_idx].values
+
+        for i, row in enumerate(m):
+            for j, sentence in enumerate(row):
+                if sentence not in s_vocab:
+                    s_vocab[sentence] = len(s_vocab)
+                self.mat[i, j] = s_vocab[sentence]
+        del m
+        del df
+
+        self.embs = np.zeros((len(s_vocab), 4800), dtype=np.float32)
+        chunk_size = 500
+        keys = list(s_vocab.keys())
+        for i in range(0, len(self.embs), chunk_size):
+            self.embs[i:i + chunk_size, :] = self._encode(keys[i:i + chunk_size])
+
+    def _encode(self, column: Sequence[str]) -> np.ndarray:
+        res = self.encoder.encode(column)
+        return res
+
+    def batch_iterator(self, permutation: Sequence[int], batch_size: int = 1) -> Iterator[np.ndarray]:
+        for i in range(0, len(self), batch_size):
+            selection = self.mat[permutation[i:i + batch_size]]
+            batch = self.embs[selection]
+            yield batch
+
+    def batch_per_epoch_generator(self, batch_size: int = 1,
+                                  shuffle: bool = True) -> Iterator[Dict[str, Union[np.ndarray, bool]]]:
+        permutation = generate_balanced_permutation(self.labels, batch_size=batch_size, shuffle=shuffle)
+        labels_it = StoriesDataset._sequence_batch_iterator(self.labels, permutation, batch_size=batch_size)
+        story_ids_it = StoriesDataset._sequence_batch_iterator(self.story_ids, permutation, batch_size=batch_size)
+        sentences_it = self.batch_iterator(permutation, batch_size=batch_size)
+        for n_batch in range(self.n_batches(batch_size=batch_size)):
+            labels = next(labels_it)
+            story_ids = next(story_ids_it)
+            batch = next(sentences_it)
+            assert batch.shape[0] <= batch_size
+            yield {"batch": batch, "labels": labels, "story_ids": story_ids, "is_training": shuffle}

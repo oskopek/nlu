@@ -14,13 +14,16 @@ def define_flags() -> None:
     # Data files
     flags.DEFINE_string('train_file', 'data/stories.train.csv', 'Train data file.')
     flags.DEFINE_string('eval_file', 'data/stories.eval.csv', 'Evaluation data file.')
-    flags.DEFINE_string('test_file', None, 'Test data file.')
+    flags.DEFINE_list('test_files', ['data/stories.test.csv', 'data/stories.roc_test.csv'], 'Test data files.')
 
     # Model choice
     flags.DEFINE_string('model', 'Roemmele', 'Model class name.')
     flags.DEFINE_integer('roemmele_multiplicative_factor', 6, 'How many negative endings to sample.')
     flags.DEFINE_bool('eval_train', False, 'Train on first 80% of eval dataset, eval on rest.')
     flags.DEFINE_bool('balanced_batches', False, 'Train with label-balanced batches.')
+    flags.DEFINE_string('attention', None, 'Attention type (add ~ Bahdanau, mult ~ Luong, None). Only for Roemmele '
+                        'models.')
+    flags.DEFINE_integer('attention_size', 1000, 'Attention size.')
 
     # TF parameters
     flags.DEFINE_boolean("no_gpu", False, 'Disables GPU usage even if a GPU is available')
@@ -38,7 +41,7 @@ def define_flags() -> None:
     flags.DEFINE_string('f', 'kernel', 'Kernel')
 
     # Other
-    flags.DEFINE_string('rnn_cell', "GRU", 'RNN cell type.')
+    flags.DEFINE_string('rnn_cell', "GRU", 'RNN cell type. If None, attention-only model.')
     flags.DEFINE_integer('rnn_cell_dim', 1000, 'RNN cell dimension.')
     flags.DEFINE_integer('word_embedding', 620, 'word_embedding')
     flags.DEFINE_integer('char_embedding', 200, 'char_embedding')

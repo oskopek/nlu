@@ -1,12 +1,17 @@
 #!/bin/sh -x
-function gdrive_download () {
-  CONFIRM=$(wget --quiet --save-cookies /tmp/cookies.txt --keep-session-cookies --no-check-certificate "https://docs.google.com/uc?export=download&id=$1" -O- | sed -rn 's/.*confirm=([0-9A-Za-z_]+).*/\1\n/p')
-  wget --load-cookies /tmp/cookies.txt "https://docs.google.com/uc?export=download&confirm=$CONFIRM&id=$1" -O $2
-  rm -rf /tmp/cookies.txt
-}
 
 wget https://polybox.ethz.ch/index.php/s/l2wM4RIyI3pD7Tl/download -O stories.train.csv
 wget https://polybox.ethz.ch/index.php/s/02IVLdBAgVcsJAx/download -O stories.eval.csv
-# Download word2vec embeddings from https://code.google.com/archive/p/word2vec/ (https://arxiv.org/pdf/1301.3781.pdf) trained on GoogleNews
-gdrive_download 0B7XkCwpI5KDYNlNUTTlSS21pQmM 'w2vGoogleNews.bin.gz'
-gunzip 'w2vGoogleNews.bin.gz'
+wget https://polybox.ethz.ch/index.php/s/AKbA8g7SeHwjU0R/download -O stories.test.csv
+
+mkdir $SCRATCH/st
+cd $SCRATCH/st
+# Download and extract the unidirectional model.
+wget "http://download.tensorflow.org/models/skip_thoughts_uni_2017_02_02.tar.gz"
+tar -xvf skip_thoughts_uni_2017_02_02.tar.gz
+rm skip_thoughts_uni_2017_02_02.tar.gz
+
+# Download and extract the bidirectional model.
+wget "http://download.tensorflow.org/models/skip_thoughts_bi_2017_02_16.tar.gz"
+tar -xvf skip_thoughts_bi_2017_02_16.tar.gz
+rm skip_thoughts_bi_2017_02_16.tar.gz

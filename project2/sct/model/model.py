@@ -47,34 +47,35 @@ class Model:
             self.reset_metrics = tf.variables_initializer(tf.get_collection(tf.GraphKeys.METRIC_VARIABLES))
             self.current_metrics = [current_accuracy, current_loss]
             self.update_metrics = [update_accuracy, update_loss]
+            self.current_eval_metrics = [current_accuracy, current_loss]
 
-            summary_writer = tf.contrib.summary.create_file_writer(self.save_dir, flush_millis=10_000)
-            self.summaries: Dict[str, List[tf.Operation]] = dict()
-            with summary_writer.as_default(), tf.contrib.summary.record_summaries_every_n_global_steps(50):
-                self.summaries["train"] = [
+            with self.summary_writer.as_default(), tf.contrib.summary.record_summaries_every_n_global_steps(50):
+                self.summaries["train"].extend([
                         tf.contrib.summary.scalar("train/loss", update_loss),
                         tf.contrib.summary.scalar("train/accuracy", update_accuracy)
-                ]
-            with summary_writer.as_default(), tf.contrib.summary.always_record_summaries():
+                ])
+            with self.summary_writer.as_default(), tf.contrib.summary.always_record_summaries():
+                self.update_eval_metrics = [update_accuracy, update_loss]
                 for dataset in ["eval", "test"]:
-                    self.summaries[dataset] = [
+                    self.summaries[dataset].extend([
                             tf.contrib.summary.scalar(dataset + "/loss", current_loss),
                             tf.contrib.summary.scalar(dataset + "/accuracy", current_accuracy)
-                    ]
+                    ])
 
         # Saver
         self.saver = tf.train.Saver(max_to_keep=3)
 
         # Initialize variables
         self.session.run(tf.global_variables_initializer())
-        with summary_writer.as_default():
+        with self.summary_writer.as_default():
             tf.contrib.summary.initialize(session=self.session, graph=self.session.graph)
 
     def __init__(self,
-                 num_sentences: int,
-                 num_words: int,
-                 num_chars: int,
                  *args,
+                 num_sentences: int = 1,
+                 num_words: int = 1,
+                 num_chars: int = 1,
+                 learning_rate: float = 1e-3,
                  threads: int = 1,
                  seed: int = 42,
                  logdir: str = "logs",
@@ -86,6 +87,7 @@ class Model:
         self.num_sentences = num_sentences
         self.num_words = num_words
         self.num_chars = num_chars
+        self.learning_rate = learning_rate
         self.save_dir = os.path.join(f"{logdir}", f"{datetime.now().strftime('%Y-%m-%d_%H%M%S')}-{expname}")
         self.checkpoint_path = os.path.join(self.save_dir, "checkpoints", "model.ckpt")
 
@@ -102,6 +104,8 @@ class Model:
                 "intra_op_parallelism_threads": threads
         }
         self.session = tf.Session(graph=graph, config=tf.ConfigProto(**config))
+        self.summary_writer = tf.contrib.summary.create_file_writer(self.save_dir, flush_millis=10_000)
+        self.summaries: Dict[str, List[tf.Operation]] = {"train": [], "eval": [], "test": []}
 
         # Construct the graph
         with self.session.graph.as_default():
@@ -161,7 +165,11 @@ class Model:
         fetches = [self.training_step, self.summaries["train"]]
         return self.session.run(fetches, self._build_feed_dict(batch, is_training=True))
 
+    def _pre_train(self, data: Datasets) -> None:
+        pass
+
     def _train(self, data: Datasets, epochs: int, batch_size: int = 1) -> None:
+        self._pre_train(data)
         with tqdm.tqdm(range(epochs), desc="Epochs") as epoch_tqdm:
             for epoch in epoch_tqdm:
                 batch_count, batch_generator = data.train.batches_per_epoch(batch_size)
@@ -184,9 +192,9 @@ class Model:
     def evaluate_epoch(self, data: StoriesDataset, dataset: str, batch_size: int = 1) -> List[float]:
         self.session.run(self.reset_metrics)
         for batch in data.batch_per_epoch_generator(batch_size, shuffle=False):
-            self.session.run(self.update_metrics, self._build_feed_dict(batch))
-        returns = self.session.run(self.current_metrics + [self.summaries[dataset]])
-        return returns[:len(self.current_metrics)]  # return current metrics
+            self.session.run(self.update_eval_metrics, self._build_feed_dict(batch))
+        returns = self.session.run(self.current_eval_metrics + [self.summaries[dataset]])
+        return returns[:len(self.current_eval_metrics)]  # return current metrics
 
     def predict_epoch(self, data: StoriesDataset, dataset: str, batch_size: int = 1) -> List[int]:
         self.session.run(self.reset_metrics)

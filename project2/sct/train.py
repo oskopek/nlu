@@ -9,6 +9,7 @@ from . import flags
 from . import model as model_module
 from .data.datasets import Datasets
 from .data.preprocessing import Preprocessing
+from .data.stories import NLPStoriesDataset
 
 
 def train(network: model_module.Model, dsets: Datasets, batch_size: int = 1, epochs: int = 1) -> None:
@@ -23,7 +24,6 @@ def test(network: model_module.Model, dsets: Datasets, batch_size: int = 1, expn
     with open(predictions_fname, "w+") as f:
         for p in predictions:
             print(p, file=f)
-
     # TODO(oskopek): Proper output formatting.
 
 
@@ -37,19 +37,22 @@ def main(FLAGS: tf.app.flags._FlagValuesWrapper) -> None:
             preprocessing=preprocessing,
             roemmele_multiplicative_factor=FLAGS.roemmele_multiplicative_factor,
             eval_train=FLAGS.eval_train,
-            balanced_batches=FLAGS.balanced_batches)
+            balanced_batches=FLAGS.balanced_batches,
+            sent_embedding='sentences' in FLAGS.model.lower(),  # HACK
+    )
 
     print("Initializing network...", flush=True)
     network = None
 
     for name, obj in inspect.getmembers(model_module):
         if inspect.isclass(obj) and name == FLAGS.model:
-            vocabularies = dsets.train.vocabularies
-            num_sentences = len(vocabularies.sentence_vocabulary)
-            num_words = len(vocabularies.word_vocabulary)
-            num_chars = len(vocabularies.char_vocabulary)
             flag_dict = {k: v.value for k, v in {**FLAGS.__flags}.items()}  # HACK
-            network = obj(num_sentences=num_sentences, num_words=num_words, num_chars=num_chars, **flag_dict)
+            if isinstance(dsets.train, NLPStoriesDataset):
+                vocabularies = dsets.train.vocabularies
+                flag_dict['num_sentences'] = len(vocabularies.sentence_vocabulary)
+                flag_dict['num_words'] = len(vocabularies.word_vocabulary)
+                flag_dict['num_chars'] = len(vocabularies.char_vocabulary)
+            network = obj(**flag_dict)
 
     if network is None:
         raise ValueError(f"Unknown model {FLAGS.model}.")

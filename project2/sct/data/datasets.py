@@ -4,7 +4,10 @@ import numpy as np
 import pandas as pd
 
 from .preprocessing import Preprocessing
-from .stories import StoriesDataset
+from .stories import NLPStoriesDataset, SkipThoughtStoriesDataset, StoriesDataset
+
+from .skip_thoughts import configuration
+from .skip_thoughts import encoder_manager
 
 
 class Datasets:
@@ -16,7 +19,8 @@ class Datasets:
                  preprocessing: Optional[Preprocessing] = None,
                  roemmele_multiplicative_factor: int = 0,
                  eval_train: bool = False,
-                 balanced_batches: bool = False) -> None:
+                 balanced_batches: bool = False,
+                 sent_embedding: bool = False) -> None:
         self.train_file = train_file
         self.eval_file = eval_file
         self.test_file = test_file
@@ -24,6 +28,24 @@ class Datasets:
         self.roemmele_multiplicative_factor = roemmele_multiplicative_factor
         self.eval_train = eval_train
         self.balanced_batches = balanced_batches
+        self.sent_embedding = sent_embedding
+
+        PREFIX = '/cluster/scratch/oskopek'
+        VOCAB_FILE = "{}/st/{}/vocab.txt"
+        EMBEDDING_MATRIX_FILE = "{}/st/{}/embeddings.npy"
+        CHECKPOINT_PATH = "{}/st/{}/model.ckpt-{}"
+
+        self.encoder = encoder_manager.EncoderManager()
+        self.encoder.load_model(
+                configuration.model_config(),
+                vocabulary_file=VOCAB_FILE.format(PREFIX, "uni"),
+                embedding_matrix_file=EMBEDDING_MATRIX_FILE.format(PREFIX, "uni"),
+                checkpoint_path=CHECKPOINT_PATH.format(PREFIX, "uni", 501424))
+        self.encoder.load_model(
+                configuration.model_config(bidirectional_encoder=True),
+                vocabulary_file=VOCAB_FILE.format(PREFIX, "bi"),
+                embedding_matrix_file=EMBEDDING_MATRIX_FILE.format(PREFIX, "bi"),
+                checkpoint_path=CHECKPOINT_PATH.format(PREFIX, "bi", 500008))
 
         self._load()
 
@@ -189,11 +211,24 @@ class Datasets:
             if self.test_file:
                 self.preprocessing.transform(df_test, evaluate=True)
 
-        print("Generating TF data...", flush=True)
-        self.train = StoriesDataset(
-                df_train, vocabularies=None, label_dictionary=label_vocab, balanced_batches=self.balanced_batches)
-        self.eval = StoriesDataset(
-                df_eval, vocabularies=self.train.vocabularies, balanced_batches=self.balanced_batches)
-        if self.test_file:
-            self.test = StoriesDataset(
-                    df_test, vocabularies=self.train.vocabularies, balanced_batches=self.balanced_batches)
+        if self.sent_embedding:
+            print("Generating TF sentence embedded data...", flush=True)
+            self.train: StoriesDataset = SkipThoughtStoriesDataset(
+                    df_train,
+                    encoder=self.encoder,
+                    label_dictionary=label_vocab,
+                    balanced_batches=self.balanced_batches)
+            self.eval: StoriesDataset = SkipThoughtStoriesDataset(
+                    df_eval, encoder=self.encoder, balanced_batches=self.balanced_batches)
+            if self.test_file:
+                self.test: StoriesDataset = SkipThoughtStoriesDataset(
+                        df_test, encoder=self.encoder, balanced_batches=self.balanced_batches)
+        else:
+            print("Generating TF word data...", flush=True)
+            self.train: StoriesDataset = NLPStoriesDataset(
+                    df_train, vocabularies=None, label_dictionary=label_vocab, balanced_batches=self.balanced_batches)
+            self.eval: StoriesDataset = NLPStoriesDataset(
+                    df_eval, vocabularies=self.train.vocabularies, balanced_batches=self.balanced_batches)
+            if self.test_file:
+                self.test: StoriesDataset = NLPStoriesDataset(
+                        df_test, vocabularies=self.train.vocabularies, balanced_batches=self.balanced_batches)
