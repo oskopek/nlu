@@ -121,13 +121,13 @@ class Roemmele(Model):
                 ending1_states = tf.concat([sentence_states, ending1_states], axis=1)
                 ending2_states = tf.concat([sentence_states, ending2_states], axis=1)
 
-            with tf.variable_scope("ending"):
+            with tf.variable_scope("ending") as ending_scope:
                 with tf.name_scope("sentence_rnn"):
                     per_story_states = self._sentence_rnn(ending1_states)
                 with tf.name_scope("fc"):
                     self.ending1_output = self._fc(per_story_states)
 
-            with tf.variable_scope("ending", reuse=True):
+            with tf.variable_scope(ending_scope, reuse=True):
                 with tf.name_scope("sentence_rnn"):
                     per_story_states = self._sentence_rnn(ending2_states)
                 with tf.name_scope("fc"):
@@ -151,6 +151,9 @@ class Roemmele(Model):
                 clipped_gradients = [(tf.clip_by_norm(gradient, self.grad_clip), var) for gradient, var in gradients]
                 training_step = optimizer.apply_gradients(clipped_gradients, global_step=self.global_step)
 
+                variables = tf.trainable_variables()
+                print("Variables", variables)
+
         return eval_predictions, loss, training_step
 
     def _summaries_and_init(self) -> None:
@@ -162,9 +165,6 @@ class Roemmele(Model):
             self.current_metrics = [current_accuracy, current_loss]
             self.update_metrics = [update_accuracy, update_loss]
             self.current_eval_metrics = [current_eval_accuracy]
-            eval_histograms = [tf.contrib.summary.histogram("eval/activations1", tf.sigmoid(self.ending1_output)),
-                            tf.contrib.summary.histogram("eval/activations2", tf.sigmoid(self.ending2_output))]
-            self.update_eval_metrics = [update_eval_accuracy] + eval_histograms
 
             summary_writer = tf.contrib.summary.create_file_writer(self.save_dir, flush_millis=10_000)
             self.summaries: Dict[str, List[tf.Operation]] = dict()
@@ -175,13 +175,16 @@ class Roemmele(Model):
                         tf.contrib.summary.scalar("train/accuracy", update_accuracy)
                 ]
             with summary_writer.as_default(), tf.contrib.summary.always_record_summaries():
+                eval_histograms = [tf.contrib.summary.histogram("eval/activations1", tf.sigmoid(self.ending1_output)),
+                                tf.contrib.summary.histogram("eval/activations2", tf.sigmoid(self.ending2_output))]
+                self.update_eval_metrics = [update_eval_accuracy] + eval_histograms
                 for dataset in ["eval", "test"]:
                     self.summaries[dataset] = [
                             tf.contrib.summary.scalar(dataset + "/accuracy", current_eval_accuracy)
                     ]
 
         # Saver
-        self.saver = tf.train.Saver(max_to_keep=20)
+        self.saver = tf.train.Saver(max_to_keep=4)
 
         # Initialize variables
         self.session.run(tf.global_variables_initializer())
