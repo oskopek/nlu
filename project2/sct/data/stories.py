@@ -14,6 +14,14 @@ DatasetRow = Tuple[Sentence, ...]
 Dataset = Sequence[DatasetRow]
 
 
+def generate_permutation(labels: Sequence[T], shuffle: bool = True) -> Sequence[int]:
+    if not shuffle:
+        return np.arange(len(labels))
+
+    permutation = np.random.permutation(len(labels))  # shuffle all
+    return permutation
+
+
 # TODO(oskopek): This might produce last batches unbalanced, which means that the eval error will be skewed?
 def generate_balanced_permutation(labels: Sequence[T], batch_size: int = 1, shuffle: bool = True) -> Sequence[int]:
     """Currently only works for binary labels and an approximately balanced dataset."""
@@ -21,40 +29,38 @@ def generate_balanced_permutation(labels: Sequence[T], batch_size: int = 1, shuf
         return np.arange(len(labels))
 
     permutation = np.random.permutation(len(labels))  # shuffle all
-    return permutation
-    """
-        label_split: Dict[T, List[int]] = dict()  # split by label
-        for i, label in enumerate(labels):
-            if label not in label_split:
-                label_split[label] = []
-            label_split[label].append(permutation[i])
+    label_split: Dict[T, List[int]] = dict()  # split by label
+    for i, label in enumerate(labels):
+        if label not in label_split:
+            label_split[label] = []
+        label_split[label].append(permutation[i])
 
-        balanced_perm = np.zeros_like(permutation)
-        label_list = list(label_split.keys())
-        one_label, two_label = label_list
-        ones_ratio = len(label_split[one_label]) / len(labels)  # balance batches by ratio
-        for n_batch in range(0, len(labels), batch_size):
-            left_elements = min(batch_size, len(labels) - n_batch)
-            counts: Dict[T, int] = {k: 0 for k in label_list}
-            for n_sample in range(left_elements):
-                if len(label_split[one_label]) == 0:
-                    chosen_label = two_label
-                elif len(label_split[two_label]) == 0:
+    balanced_perm = np.zeros_like(permutation)
+    label_list = list(label_split.keys())
+    one_label, two_label = label_list
+    ones_ratio = len(label_split[one_label]) / len(labels)  # balance batches by ratio
+    for n_batch in range(0, len(labels), batch_size):
+        left_elements = min(batch_size, len(labels) - n_batch)
+        counts: Dict[T, int] = {k: 0 for k in label_list}
+        for n_sample in range(left_elements):
+            if len(label_split[one_label]) == 0:
+                chosen_label = two_label
+            elif len(label_split[two_label]) == 0:
+                chosen_label = one_label
+            else:
+                denominator = sum(counts.values())
+                cur_ones_ratio = counts[one_label] / denominator if denominator != 0 else 0
+                if cur_ones_ratio < ones_ratio:
                     chosen_label = one_label
+                elif cur_ones_ratio > ones_ratio:
+                    chosen_label = two_label
                 else:
-                    denominator = sum(counts.values())
-                    cur_ones_ratio = counts[one_label] / denominator if denominator != 0 else 0
-                    if cur_ones_ratio < ones_ratio:
-                        chosen_label = one_label
-                    elif cur_ones_ratio > ones_ratio:
-                        chosen_label = two_label
-                    else:
-                        chosen_label = np.random.choice(label_list)
-                balanced_perm[n_batch + n_sample] = label_split[chosen_label].pop()
-                counts[chosen_label] += 1
-            # print("ones_ratio", counts[one_label] / sum(counts.values()))
-        return balanced_perm
-    """
+                    chosen_label = np.random.choice(label_list)
+            balanced_perm[n_batch + n_sample] = label_split[chosen_label].pop()
+            counts[chosen_label] += 1
+        # print("ones_ratio", counts[one_label] / sum(counts.values()))
+    return balanced_perm
+
 
 class Vocabularies:
     WORD_DIM = 620
@@ -80,11 +86,15 @@ class Vocabularies:
                         if char not in self.char_vocabulary:
                             self.char_vocabulary[char] = len(self.char_vocabulary)
 
-        self.we_matrix = np.random.normal(size=(len(self.word_vocabulary), self.WORD_DIM))
         print("Loading st word embeddings")
         word_embeddings = np.load('data/st/embeddings.npy')
-        vocab = {line.strip(): i for i, line in enumerate(open('data/st/vocab.txt', 'r'))}
-        
+        vocab: Dict[str, int] = {}
+        for i, line in enumerate(open('data/st/vocab.txt', 'r')):
+            word = line.strip()
+            self.word_vocabulary[word] = len(self.word_vocabulary)
+            vocab[word] = i
+        self.we_matrix = np.zeros(shape=(len(self.word_vocabulary), self.WORD_DIM), dtype=np.float32)
+
         words_missed = 0
         for word, word_index in self.word_vocabulary.items():
             if word in vocab:
@@ -92,7 +102,9 @@ class Vocabularies:
             else:
                 print(word)
                 words_missed += 1
+        del word_embeddings, vocab
         print("Missed %d/%d words from word2vec embeddings." % (words_missed, len(self.word_vocabulary)))
+
 
 class NLPData:
 
@@ -191,10 +203,12 @@ class StoriesDataset:
                  label_dictionary: Dict[int, int] = {
                          1: 0,
                          2: 1
-                 }) -> None:
+                 },
+                 balanced_batches: bool = False) -> None:
         self._len: int = len(df)
         self.story_ids: Sequence[str] = df['storyid'].values
         self.label_dictionary: Dict[int, int] = label_dictionary
+        self.balanced_batches = balanced_batches
         self.labels: Sequence[int] = np.fromiter(
                 (self.label_dictionary[label] for label in df['label'].values), dtype=np.int32)
 
@@ -241,7 +255,10 @@ class StoriesDataset:
 
     def batch_per_epoch_generator(self, batch_size: int = 1,
                                   shuffle: bool = True) -> Iterator[Dict[str, Union[np.ndarray, bool]]]:
-        permutation = generate_balanced_permutation(self.labels, batch_size=batch_size, shuffle=shuffle)
+        if self.balanced_batches:
+            permutation = generate_balanced_permutation(self.labels, batch_size=batch_size, shuffle=shuffle)
+        else:
+            permutation = generate_permutation(self.labels, shuffle=shuffle)
         sentences_it = self.sentences.batch_iterator(permutation, batch_size=batch_size)
         labels_it = StoriesDataset._sequence_batch_iterator(self.labels, permutation, batch_size=batch_size)
         story_ids_it = StoriesDataset._sequence_batch_iterator(self.story_ids, permutation, batch_size=batch_size)

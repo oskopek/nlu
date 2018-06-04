@@ -4,6 +4,7 @@ import tensorflow as tf
 
 from .model import Model
 from sct.data.stories import StoriesDataset
+from sct.data.datasets import Datasets
 
 
 class Roemmele(Model):
@@ -88,7 +89,8 @@ class Roemmele(Model):
         # Create the cell
         rnn_cell_sentences = self._create_cell(self.rnn_cell_dim, name='sentence_cell')
 
-        _, state = tf.nn.static_rnn(cell=rnn_cell_sentences, inputs=tf.unstack(per_sentence_states, axis=1), dtype=tf.float32)
+        _, state = tf.nn.static_rnn(
+                cell=rnn_cell_sentences, inputs=tf.unstack(per_sentence_states, axis=1), dtype=tf.float32)
         if self.rnn_cell == "LSTM":
             state = state[0]  # c_state
         print("per_story_states", state.get_shape())
@@ -175,13 +177,13 @@ class Roemmele(Model):
                         tf.contrib.summary.scalar("train/accuracy", update_accuracy)
                 ]
             with summary_writer.as_default(), tf.contrib.summary.always_record_summaries():
-                eval_histograms = [tf.contrib.summary.histogram("eval/activations1", tf.sigmoid(self.ending1_output)),
-                                tf.contrib.summary.histogram("eval/activations2", tf.sigmoid(self.ending2_output))]
+                eval_histograms = [
+                        tf.contrib.summary.histogram("eval/activations1", tf.sigmoid(self.ending1_output)),
+                        tf.contrib.summary.histogram("eval/activations2", tf.sigmoid(self.ending2_output))
+                ]
                 self.update_eval_metrics = [update_eval_accuracy] + eval_histograms
                 for dataset in ["eval", "test"]:
-                    self.summaries[dataset] = [
-                            tf.contrib.summary.scalar(dataset + "/accuracy", current_eval_accuracy)
-                    ]
+                    self.summaries[dataset] = [tf.contrib.summary.scalar(dataset + "/accuracy", current_eval_accuracy)]
 
         # Saver
         self.saver = tf.train.Saver(max_to_keep=4)
@@ -190,6 +192,11 @@ class Roemmele(Model):
         self.session.run(tf.global_variables_initializer())
         with summary_writer.as_default():
             tf.contrib.summary.initialize(session=self.session, graph=self.session.graph)
+
+    def train(self, data: Datasets, epochs: int, batch_size: int = 1) -> None:
+        self.session.run(
+                self.assign_pretrained_we, feed_dict={self.pretrained_embeddings: data.train.vocabularies.we_matrix})
+        super().train(data, epochs, batch_size=batch_size)
 
     def evaluate_epoch(self, data: StoriesDataset, dataset: str, batch_size: int = 1) -> List[float]:
         self.session.run(self.reset_metrics)

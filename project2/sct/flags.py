@@ -19,6 +19,8 @@ def define_flags() -> None:
     # Model choice
     flags.DEFINE_string('model', 'Roemmele', 'Model class name.')
     flags.DEFINE_integer('roemmele_multiplicative_factor', 6, 'How many negative endings to sample.')
+    flags.DEFINE_bool('eval_train', False, 'Train on first 80% of eval dataset, eval on rest.')
+    flags.DEFINE_bool('balanced_batches', False, 'Train with label-balanced batches.')
 
     # TF parameters
     flags.DEFINE_boolean("no_gpu", False, 'Disables GPU usage even if a GPU is available')

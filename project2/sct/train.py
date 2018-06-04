@@ -35,7 +35,9 @@ def main(FLAGS: tf.app.flags._FlagValuesWrapper) -> None:
             FLAGS.eval_file,
             FLAGS.test_file,
             preprocessing=preprocessing,
-            roemmele_multiplicative_factor=FLAGS.roemmele_multiplicative_factor)
+            roemmele_multiplicative_factor=FLAGS.roemmele_multiplicative_factor,
+            eval_train=FLAGS.eval_train,
+            balanced_batches=FLAGS.balanced_batches)
 
     print("Initializing network...", flush=True)
     network = None

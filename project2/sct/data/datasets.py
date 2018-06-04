@@ -14,12 +14,16 @@ class Datasets:
                  eval_file: str,
                  test_file: str,
                  preprocessing: Optional[Preprocessing] = None,
-                 roemmele_multiplicative_factor: int = 0) -> None:
+                 roemmele_multiplicative_factor: int = 0,
+                 eval_train: bool = False,
+                 balanced_batches: bool = False) -> None:
         self.train_file = train_file
         self.eval_file = eval_file
         self.test_file = test_file
         self.preprocessing = preprocessing
         self.roemmele_multiplicative_factor = roemmele_multiplicative_factor
+        self.eval_train = eval_train
+        self.balanced_batches = balanced_batches
 
         self._load()
 
@@ -57,7 +61,7 @@ class Datasets:
 
     # TODO(oskopek): Sample random train endings per epoch.
     @staticmethod
-    def _sample_random_train_endings(df: pd.DataFrame) -> pd.DataFrame:
+    def _sample_random_train_ending2(df: pd.DataFrame) -> pd.DataFrame:
         """
         Assumes all `ending2`s are empty and all `label`s are 1.
         Also shuffles randomly (~Bernoulli(1/2)) endings so that about half of labels is 1 and half is 2.
@@ -93,7 +97,7 @@ class Datasets:
 
     # TODO(oskopek): Sample random train endings per epoch.
     @staticmethod
-    def _sample_random_train_endings_roemmele(df: pd.DataFrame, multiplicative_factor: int = 4) -> pd.DataFrame:
+    def _sample_random_train_ending1_roemmele(df: pd.DataFrame, multiplicative_factor: int = 4) -> pd.DataFrame:
         """
         Assumes all `ending2`s are empty and all `label`s are 1.
         """
@@ -120,21 +124,63 @@ class Datasets:
         df = df.append(dfs)
         return df
 
+    @staticmethod
+    def _make_eval_ending1(df: pd.DataFrame) -> pd.DataFrame:
+        twos_idxs = df['label'].values == 2
+
+        ending1 = df['ending1'].values
+        ending1_orig = df['ending1'].values.copy()
+        ending2 = df['ending2'].values
+        label = df['label'].values
+
+        # Swap ending1 and ending2
+        np.copyto(ending1, ending2, where=twos_idxs)
+        np.copyto(ending2, ending1_orig, where=twos_idxs)
+        np.place(label, twos_idxs, [1])
+
+        df['ending1'] = ending1
+        df['ending2'] = ending2
+        df['label'] = label
+
+        df2 = df.copy(deep=True)
+        df2['label'] = np.zeros_like(label)
+        df2['ending1'] = df2['ending2']
+
+        df['ending2'] = np.full_like(ending2, '')
+        df2['ending2'] = np.full_like(ending2, '')
+
+        df = df.append(df2)
+        return df
+
     def _load(self) -> None:
         print("Loading data from disk...", flush=True)
-        df_train = self._read_train(self.train_file)
-        df_eval = self._read_eval(self.eval_file)
+        if self.eval_train:
+            df_train = self._read_eval(self.eval_file)
+            threshold = int(0.8 * len(df_train))
+            df_train = df_train[:threshold]
+            df_eval = self._read_eval(self.eval_file)[threshold:]
+
+            print("Sampling eval endings...", flush=True)
+            if self.roemmele_multiplicative_factor is not None:
+                label_vocab = {0: 0, 1: 1}
+                df_train = Datasets._make_eval_ending1(df_train)
+            else:
+                label_vocab = {1: 0, 2: 1}
+        else:
+            df_train = self._read_train(self.train_file)
+            df_eval = self._read_eval(self.eval_file)
+
+            print("Sampling random train endings...", flush=True)
+            if self.roemmele_multiplicative_factor is not None:
+                label_vocab = {0: 0, 1: 1}
+                df_train = Datasets._sample_random_train_ending1_roemmele(df_train, self.roemmele_multiplicative_factor)
+            else:
+                label_vocab = {1: 0, 2: 1}
+                df_train = Datasets._sample_random_train_ending2(df_train)
+
         df_test = None
         if self.test_file:
             df_test = self._read_eval(self.test_file)
-
-        print("Sampling random train endings...", flush=True)
-        if self.roemmele_multiplicative_factor is not None:
-            label_vocab = {0: 0, 1: 1}
-            df_train = Datasets._sample_random_train_endings_roemmele(df_train, self.roemmele_multiplicative_factor)
-        else:
-            label_vocab = {1: 0, 2: 1}
-            df_train = Datasets._sample_random_train_endings(df_train)
 
         print("Pre-processing...", flush=True)
         if self.preprocessing:
@@ -144,7 +190,10 @@ class Datasets:
                 self.preprocessing.transform(df_test, evaluate=True)
 
         print("Generating TF data...", flush=True)
-        self.train = StoriesDataset(df_train, vocabularies=None, label_dictionary=label_vocab)
-        self.eval = StoriesDataset(df_eval, vocabularies=self.train.vocabularies)
+        self.train = StoriesDataset(
+                df_train, vocabularies=None, label_dictionary=label_vocab, balanced_batches=self.balanced_batches)
+        self.eval = StoriesDataset(
+                df_eval, vocabularies=self.train.vocabularies, balanced_batches=self.balanced_batches)
         if self.test_file:
-            self.test = StoriesDataset(df_test, vocabularies=self.train.vocabularies)
+            self.test = StoriesDataset(
+                    df_test, vocabularies=self.train.vocabularies, balanced_batches=self.balanced_batches)
