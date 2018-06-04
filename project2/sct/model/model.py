@@ -63,7 +63,7 @@ class Model:
                     ]
 
         # Saver
-        self.saver = tf.train.Saver(max_to_keep=20)
+        self.saver = tf.train.Saver(max_to_keep=3)
 
         # Initialize variables
         self.session.run(tf.global_variables_initializer())
@@ -108,6 +108,7 @@ class Model:
             self._placeholders()
             self.predictions, self.loss, self.training_step = self.build_model()
             self._summaries_and_init()
+            print("Trainable variables:", tf.trainable_variables())
 
     def save(self) -> str:
         # Do not save checkpoints.
