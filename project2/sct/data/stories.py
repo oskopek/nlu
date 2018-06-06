@@ -17,11 +17,11 @@ DatasetRow = Tuple[Sentence, ...]
 Dataset = Sequence[DatasetRow]
 
 
-def generate_permutation(labels: Sequence[T], shuffle: bool = True) -> Sequence[int]:
+def generate_permutation(length: int, shuffle: bool = True) -> Sequence[int]:
     if not shuffle:
-        return np.arange(len(labels))
+        return np.arange(length)
     else:
-        return np.random.permutation(len(labels))
+        return np.random.permutation(length)
 
 
 # TODO(oskopek): This might produce last batches unbalanced, which means that the eval error will be skewed?
@@ -89,9 +89,10 @@ class Vocabularies:
                             self.char_vocabulary[char] = len(self.char_vocabulary)
 
         print("Loading st word embeddings")
-        word_embeddings = np.load('data/st/embeddings.npy')
+        PREFIX = os.environ['$SCRATCH']
+        word_embeddings = np.load(f'{PREFIX}/st/uni/embeddings.npy')
         vocab: Dict[str, int] = {}
-        for i, line in enumerate(open('data/st/vocab.txt', 'r')):
+        for i, line in enumerate(open(f'{PREFIX}/st/uni/vocab.txt', 'r')):
             word = line.strip()
             self.word_vocabulary[word] = len(self.word_vocabulary)
             vocab[word] = i
@@ -278,21 +279,19 @@ class NLPStoriesDataset(StoriesDataset):
 
     def batch_per_epoch_generator(self, batch_size: int = 1,
                                   shuffle: bool = True) -> Iterator[Dict[str, Union[np.ndarray, bool]]]:
-        if self.balanced_batches:
+        if self.balanced_batches and hasattr(self, 'labels'):
             permutation = generate_balanced_permutation(self.labels, batch_size=batch_size, shuffle=shuffle)
         else:
-            permutation = generate_permutation(self.labels, shuffle=shuffle)
+            permutation = generate_permutation(len(self), shuffle=shuffle)
         sentences_it = self.sentences.batch_iterator(permutation, batch_size=batch_size)
-        labels_it = StoriesDataset._sequence_batch_iterator(self.labels, permutation, batch_size=batch_size)
-        story_ids_it = StoriesDataset._sequence_batch_iterator(self.story_ids, permutation, batch_size=batch_size)
+        if hasattr(self, 'labels'):
+            labels_it = StoriesDataset._sequence_batch_iterator(self.labels, permutation, batch_size=batch_size)
         for n_batch in range(self.n_batches(batch_size=batch_size)):
-            labels = next(labels_it)
-            story_ids = next(story_ids_it)
             batch_to_sentence_ids, batch_to_sentences, sentence_to_word_ids, sentence_to_words, sentence_lens, \
                 word_to_char_ids, word_to_chars, word_lens = next(sentences_it)
             assert batch_to_sentence_ids.shape[0] <= batch_size
             assert batch_to_sentences.shape == batch_to_sentence_ids.shape
-            yield {
+            feed_dict = {
                     "batch_to_sentence_ids": batch_to_sentence_ids,
                     "batch_to_sentences": batch_to_sentences,
                     "sentence_to_word_ids": sentence_to_word_ids,
@@ -301,16 +300,17 @@ class NLPStoriesDataset(StoriesDataset):
                     "word_to_char_ids": word_to_char_ids,
                     "word_to_chars": word_to_chars,
                     "word_lens": word_lens,
-                    "labels": labels,
-                    "story_ids": story_ids,
                     "is_training": shuffle,
             }
+            if hasattr(self, 'labels'):
+                feed_dict["labels"] = next(labels_it)
+            yield feed_dict
 
 
 class SkipThoughtStoriesDataset(StoriesDataset):
 
     def __init__(self, df: pd.DataFrame, encoder: EncoderManager, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
+        super().__init__(df, *args, **kwargs)
         self.encoder = encoder
         sentence_idx = create_sentence_indexer(self.SENTENCES, self.ENDINGS)
 
@@ -345,13 +345,18 @@ class SkipThoughtStoriesDataset(StoriesDataset):
 
     def batch_per_epoch_generator(self, batch_size: int = 1,
                                   shuffle: bool = True) -> Iterator[Dict[str, Union[np.ndarray, bool]]]:
-        permutation = generate_balanced_permutation(self.labels, batch_size=batch_size, shuffle=shuffle)
-        labels_it = StoriesDataset._sequence_batch_iterator(self.labels, permutation, batch_size=batch_size)
-        story_ids_it = StoriesDataset._sequence_batch_iterator(self.story_ids, permutation, batch_size=batch_size)
+        if self.balanced_batches and hasattr(self, 'labels'):
+            permutation = generate_balanced_permutation(self.labels, batch_size=batch_size, shuffle=shuffle)
+        else:
+            permutation = generate_permutation(len(self), shuffle=shuffle)
+
+        if hasattr(self, 'labels'):
+            labels_it = StoriesDataset._sequence_batch_iterator(self.labels, permutation, batch_size=batch_size)
         sentences_it = self.batch_iterator(permutation, batch_size=batch_size)
         for n_batch in range(self.n_batches(batch_size=batch_size)):
-            labels = next(labels_it)
-            story_ids = next(story_ids_it)
             batch = next(sentences_it)
             assert batch.shape[0] <= batch_size
-            yield {"batch": batch, "labels": labels, "story_ids": story_ids, "is_training": shuffle}
+            feed_dict = {"batch": batch, "is_training": shuffle}
+            if hasattr(self, 'labels'):
+                feed_dict["labels"] = next(labels_it)
+            yield feed_dict

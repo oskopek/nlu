@@ -5,7 +5,7 @@ clean:
 	yapf -ir sct/ tests/
 
 train:
-	python -m sct.train $(filter-out $@,$(MAKECMDGOALS))
+	python -m sct.train
 
 check:
 	mypy --ignore-missing-imports .
@@ -15,7 +15,7 @@ test:
 	python -m pytest tests/
 
 job:
-	bsub -W 04:00 -n 4 -R "rusage[mem=8192,ngpus_excl_p=1]" python -m sct.train $(filter-out $@,$(MAKECMDGOALS))
+	bsub -W 04:00 -n 4 -R "rusage[mem=8192,ngpus_excl_p=1]" python -m sct.train
 
 %:
 	@:

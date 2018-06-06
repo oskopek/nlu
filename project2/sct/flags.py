@@ -17,7 +17,7 @@ def define_flags() -> None:
     flags.DEFINE_list('test_files', ['data/stories.test.csv', 'data/stories.spring2016.csv'], 'Test data files.')
 
     # Model choice
-    flags.DEFINE_string('model', 'Roemmele', 'Model class name.')
+    flags.DEFINE_string('model', 'RoemmeleSentences', 'Model class name. Models that have "sentences" in their name have different data preprocessing steps.')
     flags.DEFINE_integer('roemmele_multiplicative_factor', 6, 'How many negative endings to sample.')
     flags.DEFINE_bool('eval_train', False, 'Train on first 80% of eval dataset, eval on rest.')
     flags.DEFINE_bool('balanced_batches', False, 'Train with label-balanced batches.')

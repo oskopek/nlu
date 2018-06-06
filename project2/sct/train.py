@@ -21,9 +21,10 @@ def train(network: model_module.Model, dsets: Datasets, batch_size: int = 1, epo
 def test(network: model_module.Model, dsets: Datasets, batch_size: int = 1, expname: str = "exp") -> None:
     pred_dir = os.path.join(network.save_dir, "predictions")
     os.makedirs(pred_dir, exist_ok=True)
-    for stories, file in zip(dsets.tests, dsets.test_files):
+    for stories, test_fname in zip(dsets.tests, dsets.test_files):
+        test_fname = os.path.basename(test_fname)
         predictions, accuracy = network.predict_epoch(stories, "test", batch_size)
-        fname = os.path.join(pred_dir, f"{os.path.basename(FLAGS.checkpoint_path)}_exp{expname}_test{file}.txt")
+        fname = os.path.join(pred_dir, f"pred_exp-{expname}_test-{test_fname}.txt")
         if accuracy is not None:
             print(f"{fname} accuracy:\t{accuracy}")
         print_output(predictions, fname)
@@ -69,8 +70,10 @@ def main(FLAGS: tf.app.flags._FlagValuesWrapper) -> None:
         print("Running network...", flush=True)
         train(network, dsets, batch_size=FLAGS.batch_size, epochs=FLAGS.epochs)
     else:
-        print("Testing...", flush=True)
-        test(network, dsets, batch_size=FLAGS.batch_size, expname=FLAGS.exp)
+        # TODO(oskopek): Load checkpoint.
+        pass
+    print("Testing...", flush=True)
+    test(network, dsets, batch_size=FLAGS.batch_size, expname=FLAGS.exp)
     print("End.")
     print("EndStdErr.", file=sys.stderr)
 

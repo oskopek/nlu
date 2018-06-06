@@ -104,11 +104,11 @@ class Model:
                 "intra_op_parallelism_threads": threads
         }
         self.session = tf.Session(graph=graph, config=tf.ConfigProto(**config))
-        self.summary_writer = tf.contrib.summary.create_file_writer(self.save_dir, flush_millis=10_000)
         self.summaries: Dict[str, List[tf.Operation]] = {"train": [], "eval": [], "test": []}
 
         # Construct the graph
         with self.session.graph.as_default():
+            self.summary_writer = tf.contrib.summary.create_file_writer(self.save_dir, flush_millis=10_000)
             self._placeholders()
             self.predictions, self.loss, self.training_step = self.build_model()
             self._summaries_and_init()
@@ -147,7 +147,7 @@ class Model:
     def _build_feed_dict(self, batch: Dict[str, Union[np.ndarray, bool]],
                          is_training: bool = False) -> Dict[tf.Tensor, Union[np.ndarray, bool]]:
         assert is_training == batch['is_training']
-        return {
+        feed_dict = {
                 self.batch_to_sentence_ids: batch['batch_to_sentence_ids'],
                 self.batch_to_sentences: batch['batch_to_sentences'],
                 self.sentence_to_word_ids: batch['sentence_to_word_ids'],
@@ -156,9 +156,11 @@ class Model:
                 self.word_to_char_ids: batch['word_to_char_ids'],
                 # self.word_to_chars: batch['word_to_chars'],
                 self.word_lens: batch['word_lens'],
-                self.labels: batch['labels'],
                 self.is_training: batch['is_training']
         }
+        if 'labels' in batch:
+            feed_dict[self.labels] = batch['labels']
+        return feed_dict
 
     def train_batch(self, batch: Dict[str, Union[np.ndarray, bool]]) -> List[Any]:
         self.session.run(self.reset_metrics)

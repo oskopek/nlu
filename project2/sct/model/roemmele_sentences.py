@@ -149,4 +149,7 @@ class RoemmeleSentences(RNN):
     def _build_feed_dict(self, batch: Dict[str, Union[np.ndarray, bool]],
                          is_training: bool = False) -> Dict[tf.Tensor, Union[np.ndarray, bool]]:
         assert is_training == batch['is_training']
-        return {self.batch: batch['batch'], self.labels: batch['labels'], self.is_training: batch['is_training']}
+        feed_dict = {self.batch: batch['batch'], self.is_training: batch['is_training']}
+        if 'labels' in batch:
+            feed_dict[self.labels] = batch['labels']
+        return feed_dict

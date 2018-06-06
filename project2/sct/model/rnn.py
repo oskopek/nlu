@@ -80,7 +80,7 @@ class RNN(Model):
         return context, alignments, next_attention_state
 
     @staticmethod
-    def _attention_images_summary(alignments: tf.Tensor, prefix: str = "") -> tf.contrib.summary.Summary:
+    def _attention_images_summary(alignments: tf.Tensor, prefix: str = "") -> tf.Operation:
         # https://github.com/tensorflow/nmt/blob/master/nmt/attention_model.py
         """
         Create attention image and attention summary.

@@ -1,4 +1,5 @@
 from typing import Optional, List
+import os
 
 import numpy as np
 import pandas as pd
@@ -30,7 +31,7 @@ class Datasets:
         self.balanced_batches = balanced_batches
         self.sent_embedding = sent_embedding
 
-        PREFIX = '/cluster/scratch/oskopek'
+        PREFIX = os.environ["SCRATCH"]
         VOCAB_FILE = "{}/st/{}/vocab.txt"
         EMBEDDING_MATRIX_FILE = "{}/st/{}/embeddings.npy"
         CHECKPOINT_PATH = "{}/st/{}/model.ckpt-{}"
@@ -66,9 +67,9 @@ class Datasets:
 
     @staticmethod
     def _read_test_eth(file: str) -> pd.DataFrame:
-        df = pd.read_csv(
-                file, header=False, names=["sentence1", "sentence2", "sentence3", "sentence4", "ending1", "ending2"])
-        df['label'] = pd.Series([-1] * len(df), index=df.index)
+        with open(file, 'r', encoding='utf8', errors='ignore') as f:
+            names = ["sentence1", "sentence2", "sentence3", "sentence4", "ending1", "ending2"]
+            df = pd.read_csv(f, header=None, names=names)
         return df
 
     @staticmethod
@@ -202,6 +203,7 @@ class Datasets:
             print("Sampling random train endings...", flush=True)
             if self.roemmele_multiplicative_factor is not None:
                 label_vocab = {0: 0, 1: 1}
+                df_train['ending2'] = np.full_like(df_train['ending2'].values, 'a')
                 df_train = Datasets._sample_random_train_ending1_roemmele(df_train, self.roemmele_multiplicative_factor)
             else:
                 label_vocab = {1: 0, 2: 1}
