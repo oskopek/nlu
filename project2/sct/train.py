@@ -18,7 +18,7 @@ def train(network: model_module.Model, dsets: Datasets, batch_size: int = 1, epo
     network.train(data=dsets, batch_size=batch_size, epochs=epochs)
 
 
-def test(network: model_module.Model, dsets: Datasets, batch_size: int = 1, expname: str = "exp") -> None:
+def test(network: model_module.Model, dsets: Datasets, batch_size: int = 1, expname: str = "expname") -> None:
     pred_dir = os.path.join(network.save_dir, "predictions")
     os.makedirs(pred_dir, exist_ok=True)
     for stories, test_fname in zip(dsets.tests, dsets.test_files):
@@ -74,7 +74,7 @@ def main(FLAGS: tf.app.flags._FlagValuesWrapper) -> None:
         # TODO(oskopek): Load checkpoint.
         pass
     print("Testing...", flush=True)
-    test(network, dsets, batch_size=FLAGS.batch_size, expname=FLAGS.exp)
+    test(network, dsets, batch_size=FLAGS.batch_size, expname=FLAGS.expname)
     print("End.")
     print("EndStdErr.", file=sys.stderr)
 
