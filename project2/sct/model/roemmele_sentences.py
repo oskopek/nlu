@@ -125,7 +125,7 @@ class RoemmeleSentences(RNN):
                             tf.contrib.summary.scalar(dataset + "/accuracy", current_eval_accuracy))
 
         # Saver
-        self.saver = tf.train.Saver(max_to_keep=4)
+        self.saver = tf.train.Saver(max_to_keep=3)
 
         # Initialize variables
         self.session.run(tf.global_variables_initializer())

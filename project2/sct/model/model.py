@@ -116,8 +116,7 @@ class Model:
 
     def save(self) -> str:
         # Do not save checkpoints.
-        # return self.saver.save(self.session, self.checkpoint_path, global_step=self.global_step)
-        pass
+        return self.saver.save(self.session, self.checkpoint_path, global_step=self.global_step)
 
     def build_model(self) -> Tuple[tf.Tensor, tf.Tensor, tf.Operation]:
         """

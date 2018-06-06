@@ -7,7 +7,7 @@ FLAGS = flags.FLAGS
 def define_flags() -> None:
     # Directories
     flags.DEFINE_string('logdir', 'outputs', 'Logdir name.')
-    flags.DEFINE_string('exp', 'experiment', 'Experiment name.')
+    flags.DEFINE_string('exp', 'RoemmeleSentences-gru1000-epochs10-lr1e-3-bs100-es4800', 'Experiment name.')
 
     flags.DEFINE_string('checkpoint_path', None, 'Checkpoint to load. If none, ignored.')
 
