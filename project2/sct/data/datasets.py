@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 
 import numpy as np
 import pandas as pd
@@ -15,7 +15,7 @@ class Datasets:
     def __init__(self,
                  train_file: str,
                  eval_file: str,
-                 test_file: str,
+                 test_files: List[str],
                  preprocessing: Optional[Preprocessing] = None,
                  roemmele_multiplicative_factor: int = 0,
                  eval_train: bool = False,
@@ -23,7 +23,7 @@ class Datasets:
                  sent_embedding: bool = False) -> None:
         self.train_file = train_file
         self.eval_file = eval_file
-        self.test_file = test_file
+        self.test_files = test_files
         self.preprocessing = preprocessing
         self.roemmele_multiplicative_factor = roemmele_multiplicative_factor
         self.eval_train = eval_train
@@ -62,6 +62,13 @@ class Datasets:
         df = df.rename(index=str, columns={"sentence5": "ending1"})
         df['ending2'] = pd.Series([""] * len(df), index=df.index)
         df['label'] = pd.Series([1] * len(df), index=df.index)
+        return df
+
+    @staticmethod
+    def _read_test_eth(file: str) -> pd.DataFrame:
+        df = pd.read_csv(
+                file, header=False, names=["sentence1", "sentence2", "sentence3", "sentence4", "ending1", "ending2"])
+        df['label'] = pd.Series([-1] * len(df), index=df.index)
         return df
 
     @staticmethod
@@ -176,11 +183,12 @@ class Datasets:
 
     def _load(self) -> None:
         print("Loading data from disk...", flush=True)
+        df_eval = self._read_eval(self.eval_file)
         if self.eval_train:
             df_train = self._read_eval(self.eval_file)
             threshold = int(0.8 * len(df_train))
             df_train = df_train[:threshold]
-            df_eval = self._read_eval(self.eval_file)[threshold:]
+            df_eval = df_eval[threshold:]
 
             print("Sampling eval endings...", flush=True)
             if self.roemmele_multiplicative_factor is not None:
@@ -190,7 +198,6 @@ class Datasets:
                 label_vocab = {1: 0, 2: 1}
         else:
             df_train = self._read_train(self.train_file)
-            df_eval = self._read_eval(self.eval_file)
 
             print("Sampling random train endings...", flush=True)
             if self.roemmele_multiplicative_factor is not None:
@@ -200,17 +207,21 @@ class Datasets:
                 label_vocab = {1: 0, 2: 1}
                 df_train = Datasets._sample_random_train_ending2(df_train)
 
-        df_test = None
-        if self.test_file:
-            df_test = self._read_eval(self.test_file)
+        df_tests = []
+        for test_file in self.test_files:
+            method = self._read_eval
+            if 'stories.test.csv' in test_file:
+                method = self._read_test_eth
+            df_tests.append(method(test_file))
 
         print("Pre-processing...", flush=True)
         if self.preprocessing:
             self.preprocessing.transform(df_train, evaluate=False)
             self.preprocessing.transform(df_eval, evaluate=True)
-            if self.test_file:
+            for df_test in df_tests:
                 self.preprocessing.transform(df_test, evaluate=True)
 
+        self.tests: List[StoriesDataset] = []
         if self.sent_embedding:
             print("Generating TF sentence embedded data...", flush=True)
             self.train: StoriesDataset = SkipThoughtStoriesDataset(
@@ -220,15 +231,16 @@ class Datasets:
                     balanced_batches=self.balanced_batches)
             self.eval: StoriesDataset = SkipThoughtStoriesDataset(
                     df_eval, encoder=self.encoder, balanced_batches=self.balanced_batches)
-            if self.test_file:
-                self.test: StoriesDataset = SkipThoughtStoriesDataset(
-                        df_test, encoder=self.encoder, balanced_batches=self.balanced_batches)
+            for df_test in df_tests:
+                st = SkipThoughtStoriesDataset(df_test, encoder=self.encoder, balanced_batches=self.balanced_batches)
+                self.tests.append(st)
         else:
             print("Generating TF word data...", flush=True)
             self.train: StoriesDataset = NLPStoriesDataset(
                     df_train, vocabularies=None, label_dictionary=label_vocab, balanced_batches=self.balanced_batches)
             self.eval: StoriesDataset = NLPStoriesDataset(
                     df_eval, vocabularies=self.train.vocabularies, balanced_batches=self.balanced_batches)
-            if self.test_file:
-                self.test: StoriesDataset = NLPStoriesDataset(
+            for df_test in df_tests:
+                nlp = NLPStoriesDataset(
                         df_test, vocabularies=self.train.vocabularies, balanced_batches=self.balanced_batches)
+                self.tests.append(nlp)

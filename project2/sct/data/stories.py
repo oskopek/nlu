@@ -207,11 +207,13 @@ class StoriesDataset:
                  },
                  balanced_batches: bool = False) -> None:
         self._len: int = len(df)
-        self.story_ids: Sequence[str] = df['storyid'].values
+        if 'storyid' in df.columns:
+            self.story_ids: Sequence[str] = df['storyid'].values
         self.label_dictionary: Dict[int, int] = label_dictionary
         self.balanced_batches = balanced_batches
-        self.labels: Sequence[int] = np.fromiter(
-                (self.label_dictionary[label] for label in df['label'].values), dtype=np.int32)
+        if 'label' in df.columns:
+            self.labels: Sequence[int] = np.fromiter(
+                    (self.label_dictionary[label] for label in df['label'].values), dtype=np.int32)
 
         self.SENTENCES = SENTENCES
         self.ENDINGS = ENDINGS

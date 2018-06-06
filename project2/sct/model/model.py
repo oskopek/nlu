@@ -1,7 +1,7 @@
 from collections import OrderedDict
 from datetime import datetime
 import os
-from typing import Tuple, Dict, Union, List, Any
+from typing import Tuple, Dict, Union, List, Any, Optional
 
 from sct.data.datasets import Datasets
 from sct.data.stories import StoriesDataset
@@ -196,12 +196,16 @@ class Model:
         returns = self.session.run(self.current_eval_metrics + [self.summaries[dataset]])
         return returns[:len(self.current_eval_metrics)]  # return current metrics
 
-    def predict_epoch(self, data: StoriesDataset, dataset: str, batch_size: int = 1) -> List[int]:
+    def predict_epoch(self, data: StoriesDataset, dataset: str, batch_size: int = 1) -> Tuple[List[int], Optional[int]]:
         self.session.run(self.reset_metrics)
         predictions: List[int] = []
         self.session.run(self.reset_metrics)
+        accuracy = None
         for batch in data.batch_per_epoch_generator(batch_size, shuffle=False):
             batch_predictions = self.session.run(self.predictions, self._build_feed_dict(batch))
             predictions.extend(batch_predictions)
         self.session.run(self.summaries[dataset])
-        return predictions
+        if hasattr(data, 'labels'):  # TODO(oskopek) Test this.
+            assert len(predictions) == len(data.labels)
+            accuracy = np.sum(data.labels == np.array(predictions)) / len(predictions)
+        return predictions, accuracy
