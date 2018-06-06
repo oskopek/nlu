@@ -1,5 +1,7 @@
 from collections import OrderedDict
-from typing import Sequence, TypeVar, Tuple, Dict, List, Iterator, Union
+from typing import Sequence, TypeVar, Tuple, Dict, List, Iterator, Union, Optional
+
+import os
 
 import numpy as np
 import pandas as pd
@@ -71,7 +73,7 @@ class Vocabularies:
     def _default_dict() -> MissingDict[str, int]:
         return MissingDict(BASE_VOCAB, default_val=BASE_VOCAB[UNK_TOKEN])
 
-    def __init__(self, dataset: Sequence[DatasetRow]) -> None:
+    def __init__(self, dataset: Sequence[DatasetRow], skip_thought_folder: str) -> None:
         self.sentence_vocabulary: Dict[Tuple[Word, ...], int] = MissingDict({(): 0, (UNK_TOKEN,): 1}, default_val=1)
         self.word_vocabulary: Dict[Word, int] = Vocabularies._default_dict()
         self.char_vocabulary: Dict[Char, int] = Vocabularies._default_dict()
@@ -89,10 +91,9 @@ class Vocabularies:
                             self.char_vocabulary[char] = len(self.char_vocabulary)
 
         print("Loading st word embeddings")
-        PREFIX = os.environ['$SCRATCH']
-        word_embeddings = np.load(f'{PREFIX}/st/uni/embeddings.npy')
+        word_embeddings = np.load(os.path.join(skip_thought_folder, 'uni', 'embeddings.npy'))
         vocab: Dict[str, int] = {}
-        for i, line in enumerate(open(f'{PREFIX}/st/uni/vocab.txt', 'r')):
+        for i, line in enumerate(open(os.path.join(skip_thought_folder, 'uni', 'vocab.txt'), 'r')):
             word = line.strip()
             self.word_vocabulary[word] = len(self.word_vocabulary)
             vocab[word] = i
@@ -106,7 +107,7 @@ class Vocabularies:
                 print(word)
                 words_missed += 1
         del word_embeddings, vocab
-        print("Missed %d/%d words from word2vec embeddings." % (words_missed, len(self.word_vocabulary)))
+        print(f"Missed {words_missed}/{len(self.word_vocabulary)} words from word2vec embeddings.")
 
 
 class NLPData:
@@ -249,16 +250,16 @@ class StoriesDataset:
 
 class NLPStoriesDataset(StoriesDataset):
 
-    def __init__(self, df: pd.DataFrame, *args, vocabularies: Vocabularies = None, **kwargs) -> None:
+    def __init__(self, df: pd.DataFrame, skip_thought_folder: str, *args, vocabularies: Vocabularies = None,
+                 **kwargs) -> None:
         super().__init__(df, *args, **kwargs)
-
         dataset: List[DatasetRow] = self._create_nlp_text_dataset(df)
         del df
 
-        if vocabularies is None:
-            self.vocabularies = Vocabularies(dataset)
-        else:
+        if vocabularies is not None:
             self.vocabularies = vocabularies
+        else:
+            self.vocabularies = Vocabularies(dataset, skip_thought_folder=skip_thought_folder)
 
         self.sentences: NLPData = NLPData(dataset, vocabularies=self.vocabularies)
 
@@ -309,7 +310,7 @@ class NLPStoriesDataset(StoriesDataset):
 
 class SkipThoughtStoriesDataset(StoriesDataset):
 
-    def __init__(self, df: pd.DataFrame, encoder: EncoderManager, *args, **kwargs) -> None:
+    def __init__(self, df: pd.DataFrame, encoder: EncoderManager, *args, add: Optional[str] = None, **kwargs) -> None:
         super().__init__(df, *args, **kwargs)
         self.encoder = encoder
         sentence_idx = create_sentence_indexer(self.SENTENCES, self.ENDINGS)
@@ -327,6 +328,7 @@ class SkipThoughtStoriesDataset(StoriesDataset):
         del m
         del df
 
+        self.add = np.load(add) if add else None
         self.embs = np.zeros((len(s_vocab), 4800), dtype=np.float32)
         chunk_size = 500
         keys = list(s_vocab.keys())
@@ -338,9 +340,14 @@ class SkipThoughtStoriesDataset(StoriesDataset):
         return res
 
     def batch_iterator(self, permutation: Sequence[int], batch_size: int = 1) -> Iterator[np.ndarray]:
+        if hasattr(self, 'labels') and self.add is not None:
+            labels_it = StoriesDataset._sequence_batch_iterator(self.labels, permutation, batch_size=batch_size)
         for i in range(0, len(self), batch_size):
             selection = self.mat[permutation[i:i + batch_size]]
             batch = self.embs[selection]
+            if hasattr(self, 'labels') and self.add is not None:
+                labels = next(labels_it)
+                batch[labels == 0, 4, :] += self.add
             yield batch
 
     def batch_per_epoch_generator(self, batch_size: int = 1,

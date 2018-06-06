@@ -206,7 +206,7 @@ class Model:
             batch_predictions = self.session.run(self.predictions, self._build_feed_dict(batch))
             predictions.extend(batch_predictions)
         self.session.run(self.summaries[dataset])
-        if hasattr(data, 'labels'):  # TODO(oskopek) Test this.
+        if hasattr(data, 'labels'):
             assert len(predictions) == len(data.labels)
             accuracy = np.sum(data.labels == np.array(predictions)) / len(predictions)
         return predictions, accuracy

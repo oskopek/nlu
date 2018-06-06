@@ -1,4 +1,4 @@
-from typing import Sequence
+from typing import List
 
 import inspect
 import os
@@ -24,13 +24,14 @@ def test(network: model_module.Model, dsets: Datasets, batch_size: int = 1, expn
     for stories, test_fname in zip(dsets.tests, dsets.test_files):
         test_fname = os.path.basename(test_fname)
         predictions, accuracy = network.predict_epoch(stories, "test", batch_size)
+        predictions = [1 + p for p in predictions]  # map back to labels
         fname = os.path.join(pred_dir, f"pred_exp-{expname}_test-{test_fname}.txt")
         if accuracy is not None:
             print(f"{fname} accuracy:\t{accuracy}")
         print_output(predictions, fname)
 
 
-def print_output(predictions: Sequence[int], fname: str) -> None:
+def print_output(predictions: List[int], fname: str) -> None:
     with open(fname, "w+") as f:
         for p in predictions:
             print(p, file=f)

@@ -17,12 +17,13 @@ class Datasets:
                  train_file: str,
                  eval_file: str,
                  test_files: List[str],
-                 skip_thought_folder: str = None,
+                 skip_thought_folder: str = "",
                  preprocessing: Optional[Preprocessing] = None,
                  roemmele_multiplicative_factor: int = 0,
                  eval_train: bool = False,
                  balanced_batches: bool = False,
-                 sent_embedding: bool = False) -> None:
+                 sent_embedding: bool = False,
+                 add: Optional[str] = None) -> None:
         self.train_file = train_file
         self.eval_file = eval_file
         self.test_files = test_files
@@ -31,6 +32,11 @@ class Datasets:
         self.eval_train = eval_train
         self.balanced_batches = balanced_batches
         self.sent_embedding = sent_embedding
+        self.skip_thought_folder = skip_thought_folder
+        self.add = add
+        if self.add:
+            assert self.roemmele_multiplicative_factor == 1
+            assert self.sent_embedding
 
         VOCAB_FILE = os.path.join(skip_thought_folder, "{}/vocab.txt")
         EMBEDDING_MATRIX_FILE = os.path.join(skip_thought_folder, "{}/embeddings.npy")
@@ -127,7 +133,9 @@ class Datasets:
 
     # TODO(oskopek): Sample random train endings per epoch.
     @staticmethod
-    def _sample_random_train_ending1_roemmele(df: pd.DataFrame, multiplicative_factor: int = 4) -> pd.DataFrame:
+    def _sample_random_train_ending1_roemmele(df: pd.DataFrame,
+                                              multiplicative_factor: int = 4,
+                                              add: Optional[np.ndarray] = None) -> pd.DataFrame:
         """
         Assumes all `ending2`s are empty and all `label`s are 1.
         """
@@ -148,10 +156,12 @@ class Datasets:
             sampled_indexes = sample_without_current(len(df))
             df2 = df.copy(deep=True)
             df2['storyid'] = df2[['storyid']].applymap(lambda idx: f"{idx}_{i}")['storyid'].values
-            df2['ending1'] = df.ix[sampled_indexes, 'ending1'].values
+            if not add:
+                df2['ending1'] = df.ix[sampled_indexes, 'ending1'].values
             df2['label'] = np.zeros_like(df2['label'].values)
             dfs.append(df2)
-        df = df.append(dfs)
+        if len(dfs) > 0:
+            df = df.append(dfs)
         return df
 
     @staticmethod
@@ -204,7 +214,8 @@ class Datasets:
             if self.roemmele_multiplicative_factor is not None:
                 label_vocab = {0: 0, 1: 1}
                 df_train['ending2'] = np.full_like(df_train['ending2'].values, 'a')
-                df_train = Datasets._sample_random_train_ending1_roemmele(df_train, self.roemmele_multiplicative_factor)
+                df_train = Datasets._sample_random_train_ending1_roemmele(
+                        df_train, multiplicative_factor=self.roemmele_multiplicative_factor, add=self.add)
             else:
                 label_vocab = {1: 0, 2: 1}
                 df_train = Datasets._sample_random_train_ending2(df_train)
@@ -230,19 +241,31 @@ class Datasets:
                     df_train,
                     encoder=self.encoder,
                     label_dictionary=label_vocab,
-                    balanced_batches=self.balanced_batches)
+                    balanced_batches=self.balanced_batches,
+                    add=self.add)
             self.eval: StoriesDataset = SkipThoughtStoriesDataset(
-                    df_eval, encoder=self.encoder, balanced_batches=self.balanced_batches)
+                    df_eval, encoder=self.encoder, balanced_batches=self.balanced_batches, add=self.add)
             for df_test in df_tests:
-                st = SkipThoughtStoriesDataset(df_test, encoder=self.encoder, balanced_batches=self.balanced_batches)
+                st = SkipThoughtStoriesDataset(
+                        df_test, encoder=self.encoder, balanced_batches=self.balanced_batches, add=self.add)
                 self.tests.append(st)
         else:
             print("Generating TF word data...", flush=True)
             self.train: StoriesDataset = NLPStoriesDataset(
-                    df_train, vocabularies=None, label_dictionary=label_vocab, balanced_batches=self.balanced_batches)
+                    df_train,
+                    self.skip_thought_folder,
+                    vocabularies=None,
+                    label_dictionary=label_vocab,
+                    balanced_batches=self.balanced_batches)
             self.eval: StoriesDataset = NLPStoriesDataset(
-                    df_eval, vocabularies=self.train.vocabularies, balanced_batches=self.balanced_batches)
+                    df_eval,
+                    self.skip_thought_folder,
+                    vocabularies=self.train.vocabularies,
+                    balanced_batches=self.balanced_batches)
             for df_test in df_tests:
                 nlp = NLPStoriesDataset(
-                        df_test, vocabularies=self.train.vocabularies, balanced_batches=self.balanced_batches)
+                        df_test,
+                        self.skip_thought_folder,
+                        vocabularies=self.train.vocabularies,
+                        balanced_batches=self.balanced_batches)
                 self.tests.append(nlp)

@@ -51,7 +51,7 @@ class RNN(Model):
         elif self.rnn_cell == "VAN":
             return tf.nn.rnn_cell.BasicRNNCell(rnn_cell_dim, name=name)
         else:
-            raise ValueError("Unknown rnn_cell {}".format(self.rnn_cell))
+            raise ValueError(f"Unknown rnn_cell {self.rnn_cell}.")
 
     def _create_attention(self, encoder_outputs: tf.Tensor) -> tf.contrib.seq2seq.AttentionMechanism:
         if self.attention == "add":
