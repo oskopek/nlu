@@ -43,6 +43,7 @@ def main(FLAGS: tf.app.flags._FlagValuesWrapper) -> None:
             FLAGS.train_file,
             FLAGS.eval_file,
             FLAGS.test_files,
+            skip_thought_folder=FLAGS.skip_thought_folder,
             preprocessing=preprocessing,
             roemmele_multiplicative_factor=FLAGS.roemmele_multiplicative_factor,
             eval_train=FLAGS.eval_train,

@@ -11,8 +11,10 @@ cd $SCRATCH/st
 wget "http://download.tensorflow.org/models/skip_thoughts_uni_2017_02_02.tar.gz"
 tar -xvf skip_thoughts_uni_2017_02_02.tar.gz
 rm skip_thoughts_uni_2017_02_02.tar.gz
+mv skip_thoughts_uni_2017_02_02 uni
 
 # Download and extract the bidirectional model.
 wget "http://download.tensorflow.org/models/skip_thoughts_bi_2017_02_16.tar.gz"
 tar -xvf skip_thoughts_bi_2017_02_16.tar.gz
 rm skip_thoughts_bi_2017_02_16.tar.gz
+mv skip_thoughts_bi_2017_02_16 bi

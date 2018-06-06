@@ -17,6 +17,7 @@ class Datasets:
                  train_file: str,
                  eval_file: str,
                  test_files: List[str],
+                 skip_thought_folder: str = None,
                  preprocessing: Optional[Preprocessing] = None,
                  roemmele_multiplicative_factor: int = 0,
                  eval_train: bool = False,
@@ -31,22 +32,21 @@ class Datasets:
         self.balanced_batches = balanced_batches
         self.sent_embedding = sent_embedding
 
-        PREFIX = os.environ["SCRATCH"]
-        VOCAB_FILE = "{}/st/{}/vocab.txt"
-        EMBEDDING_MATRIX_FILE = "{}/st/{}/embeddings.npy"
-        CHECKPOINT_PATH = "{}/st/{}/model.ckpt-{}"
+        VOCAB_FILE = os.path.join(skip_thought_folder, "{}/vocab.txt")
+        EMBEDDING_MATRIX_FILE = os.path.join(skip_thought_folder, "{}/embeddings.npy")
+        CHECKPOINT_PATH = os.path.join(skip_thought_folder, "{}/model.ckpt-{}")
 
         self.encoder = encoder_manager.EncoderManager()
         self.encoder.load_model(
                 configuration.model_config(),
-                vocabulary_file=VOCAB_FILE.format(PREFIX, "uni"),
-                embedding_matrix_file=EMBEDDING_MATRIX_FILE.format(PREFIX, "uni"),
-                checkpoint_path=CHECKPOINT_PATH.format(PREFIX, "uni", 501424))
+                vocabulary_file=VOCAB_FILE.format("uni"),
+                embedding_matrix_file=EMBEDDING_MATRIX_FILE.format("uni"),
+                checkpoint_path=CHECKPOINT_PATH.format("uni", 501424))
         self.encoder.load_model(
                 configuration.model_config(bidirectional_encoder=True),
-                vocabulary_file=VOCAB_FILE.format(PREFIX, "bi"),
-                embedding_matrix_file=EMBEDDING_MATRIX_FILE.format(PREFIX, "bi"),
-                checkpoint_path=CHECKPOINT_PATH.format(PREFIX, "bi", 500008))
+                vocabulary_file=VOCAB_FILE.format("bi"),
+                embedding_matrix_file=EMBEDDING_MATRIX_FILE.format("bi"),
+                checkpoint_path=CHECKPOINT_PATH.format("bi", 500008))
 
         self._load()
 

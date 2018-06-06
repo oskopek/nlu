@@ -1,3 +1,5 @@
+import os
+
 import tensorflow as tf
 
 flags = tf.app.flags
@@ -15,6 +17,7 @@ def define_flags() -> None:
     flags.DEFINE_string('train_file', 'data/stories.train.csv', 'Train data file.')
     flags.DEFINE_string('eval_file', 'data/stories.eval.csv', 'Evaluation data file.')
     flags.DEFINE_list('test_files', ['data/stories.test.csv', 'data/stories.spring2016.csv'], 'Test data files.')
+    flags.DEFINE_string('skip_thought_folder', os.environ['SCRATCH'] + '/st', 'Skip-thought embeddings folder.')
 
     # Model choice
     flags.DEFINE_string('model', 'RoemmeleSentences', 'Model class name. Models that have "sentences" in their name have different data preprocessing steps.')
