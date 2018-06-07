@@ -88,7 +88,7 @@ class RoemmeleSentences(RNN):
                 loss = tf.losses.sigmoid_cross_entropy(multi_class_labels=self.labels, logits=self.train_logits)
 
             with tf.name_scope("optimizer"):
-                optimizer = tf.train.RMSPropOptimizer(learning_rate=self.learning_rate)
+                optimizer = self._optimizer()
                 gradients = optimizer.compute_gradients(loss)
                 clipped_gradients = [(tf.clip_by_norm(gradient, self.grad_clip), var) for gradient, var in gradients]
                 training_step = optimizer.apply_gradients(clipped_gradients, global_step=self.global_step)
@@ -97,6 +97,9 @@ class RoemmeleSentences(RNN):
                 print("Variables", variables)
 
         return eval_predictions, loss, training_step
+
+    def _optimizer(self) -> tf.train.Optimizer:
+        return tf.train.RMSPropOptimizer(learning_rate=self.learning_rate)
 
     def _summaries_and_init(self) -> None:
         with tf.name_scope("summaries"):

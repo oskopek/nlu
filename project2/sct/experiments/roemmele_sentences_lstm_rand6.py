@@ -9,7 +9,7 @@ FLAGS = flags.FLAGS
 def define_flags() -> None:
     # Directories
     flags.DEFINE_string('logdir', 'outputs', 'Logdir name.')
-    flags.DEFINE_string('expname', 'Roemmele_Sentences_GRU_Rand6', 'Experiment name.')
+    flags.DEFINE_string('expname', 'Roemmele_Sentences_LSTM_Rand6', 'Experiment name.')
 
     # Data files
     flags.DEFINE_string('train_file', 'data/stories.train.csv', 'Train data file.')

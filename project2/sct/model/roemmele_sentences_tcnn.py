@@ -53,6 +53,9 @@ class RoemmeleSentencesTCNN(RoemmeleSentences):
         print("per_story_states", state.get_shape())
         return state
 
+    def _optimizer(self) -> tf.train.Optimizer:
+        return tf.train.AdamOptimizer(learning_rate=self.learning_rate)
+
     def _output_fc(self, x: tf.Tensor) -> tf.Tensor:
         x = tf.layers.dropout(x, rate=self.keep_prob, training=self.is_training)
         x = tf.layers.dense(x, 300, activation=tf.nn.leaky_relu)
