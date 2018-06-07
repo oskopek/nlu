@@ -61,4 +61,5 @@ make output # watch job output on Leonhard
 make status # watch job status on Leonhard
 make test   # run unit tests (not used extensively)
 make train  # train locally with sct/flags.py as flags
+make runall # run all experiments in sct/experiments one after each other (currently only roemmele*)
 ```
