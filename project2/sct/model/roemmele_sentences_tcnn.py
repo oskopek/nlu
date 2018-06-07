@@ -5,7 +5,7 @@ import tensorflow as tf
 from .roemmele_sentences import RoemmeleSentences
 
 
-class RoemmeleSentencesRCNN(RoemmeleSentences):
+class RoemmeleSentencesTCNN(RoemmeleSentences):
 
     def __init__(self, *args, num_filters: int = 512, **kwargs) -> None:
         self.num_filters = num_filters

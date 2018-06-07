@@ -9,7 +9,7 @@ FLAGS = flags.FLAGS
 def define_flags() -> None:
     # Directories
     flags.DEFINE_string('logdir', 'outputs', 'Logdir name.')
-    flags.DEFINE_string('expname', 'RoemmeleSentences-gru1000-epochs10-lr1e-3-bs100-es4800-negadd', 'Experiment name.')
+    flags.DEFINE_string('expname', 'RoemmeleSentences-gru1000-epochs10-lr1e-3-bs100-es4800', 'Experiment name.')
 
     flags.DEFINE_string('checkpoint_path', None, 'Checkpoint to load. If none, ignored.')
 
@@ -23,9 +23,9 @@ def define_flags() -> None:
     flags.DEFINE_string(
             'model', 'RoemmeleSentences',
             'Model class name. Models that have "sentences" in their name have different data preprocessing steps.')
-    flags.DEFINE_integer('roemmele_multiplicative_factor', 1, 'How many negative endings to sample. Need 1 for '
+    flags.DEFINE_integer('roemmele_multiplicative_factor', 6, 'How many negative endings to sample. Need 1 for '
                                                               '`add` not None.')
-    flags.DEFINE_string('add', 'data/add.npy', 'Whether and which constant add to use for negative labels.')
+    flags.DEFINE_string('add', None, 'Whether and which constant add to use for negative labels.')
     flags.DEFINE_bool('eval_train', False, 'Train on first 80% of eval dataset, eval on rest.')
     flags.DEFINE_bool('balanced_batches', False, 'Train with label-balanced batches.')
     flags.DEFINE_string('attention', None, 'Attention type (add ~ Bahdanau, mult ~ Luong, None). Only for Roemmele '
