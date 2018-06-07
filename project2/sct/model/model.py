@@ -98,6 +98,8 @@ class Model:
         self.ENDINGS = ENDINGS
         self.TOTAL_SENTENCES = self.SENTENCES + self.ENDINGS
 
+        self.last_checkpoint_path = None
+
         # Create an empty graph and a session
         graph = tf.Graph()
         graph.seed = seed
@@ -117,10 +119,15 @@ class Model:
             self._summaries_and_init()
             print("Trainable variables:", tf.trainable_variables())
 
-    def save(self, eval_accuracy: float) -> str:
+    def save(self, eval_accuracy: float):
         with open(self.checkpoint_info, "a") as f:
             print(f"{self.checkpoint_path}\t{self.global_step}\t{eval_accuracy}", file=f)
-        return self.saver.save(self.session, self.checkpoint_path, global_step=self.global_step)
+        self.last_checkpoint_path = self.saver.save(self.session, self.checkpoint_path, global_step=self.global_step)
+
+    def restore_last(self) -> None:
+        if self.last_checkpoint_path is None:
+            print("No last checkpoint found, not restoring.")
+        self.saver.restore(self.session, self.last_checkpoint_path)
 
     def build_model(self) -> Tuple[tf.Tensor, tf.Tensor, tf.Operation]:
         """

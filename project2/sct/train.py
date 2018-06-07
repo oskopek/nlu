@@ -19,6 +19,8 @@ def train(network: model_module.Model, dsets: Datasets, batch_size: int = 1, epo
 
 
 def test(network: model_module.Model, dsets: Datasets, batch_size: int = 1, expname: str = "expname") -> None:
+    print("Restoring last/best model...", flush=True)
+    network.restore_last()
     pred_dir = os.path.join(network.save_dir, "predictions")
     os.makedirs(pred_dir, exist_ok=True)
     for stories, test_fname in zip(dsets.tests, dsets.test_files):
@@ -68,12 +70,8 @@ def main(FLAGS: tf.app.flags._FlagValuesWrapper) -> None:
     if network is None:
         raise ValueError(f"Unknown model {FLAGS.model}.")
 
-    if FLAGS.checkpoint_path is None:
-        print("Running network...", flush=True)
-        train(network, dsets, batch_size=FLAGS.batch_size, epochs=FLAGS.epochs)
-    else:
-        # TODO(oskopek): Load checkpoint.
-        pass
+    print("Running network...", flush=True)
+    train(network, dsets, batch_size=FLAGS.batch_size, epochs=FLAGS.epochs)
     print("Testing...", flush=True)
     test(network, dsets, batch_size=FLAGS.batch_size, expname=FLAGS.expname)
     print("End.")

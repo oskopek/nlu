@@ -11,8 +11,6 @@ def define_flags() -> None:
     flags.DEFINE_string('logdir', 'outputs', 'Logdir name.')
     flags.DEFINE_string('expname', 'Roemmele_Sentences_GRU_Rand6', 'Experiment name.')
 
-    flags.DEFINE_string('checkpoint_path', None, 'Checkpoint to load. If none, ignored.')
-
     # Data files
     flags.DEFINE_string('train_file', 'data/stories.train.csv', 'Train data file.')
     flags.DEFINE_string('eval_file', 'data/stories.eval.csv', 'Evaluation data file.')
