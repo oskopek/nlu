@@ -1,4 +1,6 @@
+flake8
 matplotlib
+mypy
 nltk
 numpy
 pandas
