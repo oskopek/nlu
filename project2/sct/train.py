@@ -15,7 +15,7 @@ from .data.stories import NLPStoriesDataset
 
 
 def train(network: model_module.Model, dsets: Datasets, batch_size: int = 1, epochs: int = 1) -> None:
-    network.train(data=dsets, batch_size=batch_size, epochs=epochs)
+    network.train(data=dsets, batch_size=batch_size, epochs=epochs, evaluate_every_steps=FLAGS.evaluate_every_steps)
 
 
 def test(network: model_module.Model, dsets: Datasets, batch_size: int = 1, expname: str = "expname") -> None:
@@ -70,10 +70,15 @@ def main(FLAGS: tf.app.flags._FlagValuesWrapper) -> None:
     if network is None:
         raise ValueError(f"Unknown model {FLAGS.model}.")
 
-    print("Running network...", flush=True)
-    train(network, dsets, batch_size=FLAGS.batch_size, epochs=FLAGS.epochs)
+    if FLAGS.load_checkpoint is not None:  # loading checkpoint
+        network.load()
+    else:  # training
+        print("Running network...", flush=True)
+        train(network, dsets, batch_size=FLAGS.batch_size, epochs=FLAGS.epochs)
+
     print("Testing...", flush=True)
     test(network, dsets, batch_size=FLAGS.batch_size, expname=FLAGS.expname)
+
     print("End.")
     print("EndStdErr.", file=sys.stderr)
 

@@ -3,7 +3,7 @@
 wget https://polybox.ethz.ch/index.php/s/l2wM4RIyI3pD7Tl/download -O stories.train.csv
 wget https://polybox.ethz.ch/index.php/s/02IVLdBAgVcsJAx/download -O stories.eval.csv
 wget https://polybox.ethz.ch/index.php/s/AKbA8g7SeHwjU0R/download -O stories.test.csv
-wget https://polybox.ethz.ch/index.php/s/h2gp3FpS3N7Xgiq/download -O stories.spring2016.csv
+wget https://polybox.ethz.ch/index.php/s/6RELTQ3CapEBSKE/download -O stories.spring2016.csv
 
 mkdir $SCRATCH/st
 cd $SCRATCH/st

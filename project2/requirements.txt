@@ -9,3 +9,4 @@ seaborn
 tensorflow-gpu==1.7.0
 tensorboard==1.7.0
 tqdm
+yapf

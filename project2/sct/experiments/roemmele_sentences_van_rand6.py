@@ -11,6 +11,9 @@ def define_flags() -> None:
     flags.DEFINE_string('logdir', 'outputs', 'Logdir name.')
     flags.DEFINE_string('expname', 'Roemmele_Sentences_VAN_Rand6', 'Experiment name.')
 
+    # Checkpoint
+    flags.DEFINE_string('load_checkpoint', None, 'Full path to the checkpoint to load.')
+
     # Data files
     flags.DEFINE_string('train_file', 'data/stories.train.csv', 'Train data file.')
     flags.DEFINE_string('eval_file', 'data/stories.eval.csv', 'Evaluation data file.')
@@ -40,6 +43,7 @@ def define_flags() -> None:
     flags.DEFINE_integer('batch_size', 100, 'Training batch size')
     flags.DEFINE_float('learning_rate', 1e-3, 'learning rate')
     flags.DEFINE_float('grad_clip', 10.0, 'Gradient clipped to L2 norm smaller than or equal to.')
+    flags.DEFINE_integer('evaluate_every_steps', 2000, 'Evaluate every N steps.')
 
     # Jupyter notebook params
     # Only to avoid raising UnrecognizedFlagError

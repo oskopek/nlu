@@ -1,5 +1,7 @@
 requirements:
 	pip install -r requirements.txt --user
+	python -c 'import nltk; nltk.download("punkt")'
+	cd data && ./download_data.sh
 
 clean:
 	yapf -ir sct/ tests/

@@ -119,15 +119,21 @@ class Model:
             self._summaries_and_init()
             print("Trainable variables:", tf.trainable_variables())
 
-    def save(self, eval_accuracy: float):
+    def save(self, eval_accuracy: float, step: int):
+        global_step = self.session.run(self.global_step)
+        assert global_step == step
         with open(self.checkpoint_info, "a") as f:
-            print(f"{self.checkpoint_path}\t{self.global_step}\t{eval_accuracy}", file=f)
+            print(f"{self.checkpoint_path}\t{global_step}\t{eval_accuracy}", file=f)
         self.last_checkpoint_path = self.saver.save(self.session, self.checkpoint_path, global_step=self.global_step)
 
     def restore_last(self) -> None:
         if self.last_checkpoint_path is None:
             print("No last checkpoint found, not restoring.")
-        self.saver.restore(self.session, self.last_checkpoint_path)
+        else:
+            self.restore(self.last_checkpoint_path)
+
+    def restore(self, checkpoint: str) -> None:
+        self.saver.restore(self.session, checkpoint)
 
     def build_model(self) -> Tuple[tf.Tensor, tf.Tensor, tf.Operation]:
         """
@@ -180,9 +186,21 @@ class Model:
     def _pre_train(self, data: Datasets) -> None:
         pass
 
-    def _train(self, data: Datasets, epochs: int, batch_size: int = 1) -> None:
+    def _train(self, data: Datasets, epochs: int, batch_size: int = 1, evaluate_every_steps: int = 2000) -> None:
+
+        def _eval(best_acc: float, cur_step: int) -> float:
+            metrics = self._eval_metrics(data, batch_size=batch_size)
+            epoch_tqdm.set_postfix(metrics)
+            eval_acc = float(metrics["eval_acc"])
+            if eval_acc > best_acc:
+                best_acc = eval_acc
+                self.save(best_acc, cur_step)
+            return best_acc
+
         self._pre_train(data)
+
         best_eval_acc = .0
+        step = 0
         with tqdm.tqdm(range(epochs), desc="Epochs") as epoch_tqdm:
             for epoch in epoch_tqdm:
                 batch_count, batch_generator = data.train.batches_per_epoch(batch_size)
@@ -192,17 +210,15 @@ class Model:
                         self.train_batch(batch)
                         # Can be enabled, but takes up time during training
                         # batch_tqdm.set_postfix(self._train_metrics())
+                        if step % evaluate_every_steps == 0:
+                            best_eval_acc = _eval(best_eval_acc, step)
+                        step += 1
+                if step % evaluate_every_steps == 0:
+                    best_eval_acc = _eval(best_eval_acc, step)
 
-                metrics = self._eval_metrics(data, batch_size=batch_size)
-                epoch_tqdm.set_postfix(metrics)
-                eval_acc = float(metrics["eval_acc"])
-                if eval_acc > best_eval_acc:
-                    best_eval_acc = eval_acc
-                    self.save(best_eval_acc)
-
-    def train(self, data: Datasets, epochs: int, batch_size: int = 1) -> None:
+    def train(self, data: Datasets, epochs: int, batch_size: int = 1, evaluate_every_steps: int = 2000) -> None:
         try:
-            self._train(data, epochs, batch_size=batch_size)
+            self._train(data, epochs, batch_size=batch_size, evaluate_every_steps=evaluate_every_steps)
         except KeyboardInterrupt:
             print("Cancelling training...")
 
