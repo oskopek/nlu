@@ -49,6 +49,7 @@ You can load an existing checkpoint by running:
 ```
 ./experiment.sh sct/experiments/<NAME_OF_EXPERIMENT>.py --load_checkpoint outputs/MODEL_DIR/checkpoints/model.ckpt-NUMBER
 ```
+The story cloze test 2016 accuracy is printed at the end of standard output, and the predictions for both this and the ETH test set can be found in `outputs/NEW_MODEL_DIR/predictions/`.
 
 ## Other make commands
 

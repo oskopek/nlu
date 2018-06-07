@@ -13,9 +13,9 @@ cp "$flags" "$new_flags"
 
 if ! [ -x "$(command -v bsub)" ]; then
   echo 'bsub is not installed, running locally.' >&2
-  python -m sct.train -- $@
+  python -m sct.train $@
 else
-  bsub -W 04:00 -n 4 -R "rusage[mem=8192,ngpus_excl_p=1]" python -m sct.train -- $@
+  bsub -W 04:00 -n 4 -R "rusage[mem=8192,ngpus_excl_p=1]" python -m sct.train $@
 fi
 echo "Submitted/ran experiment `basename "$flags"`."
 
