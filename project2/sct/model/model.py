@@ -119,11 +119,9 @@ class Model:
             self._summaries_and_init()
             print("Trainable variables:", tf.trainable_variables())
 
-    def save(self, eval_accuracy: float, step: int):
-        global_step = self.session.run(self.global_step)
-        assert global_step == step
+    def save(self, eval_accuracy: float, global_step_val: int):
         with open(self.checkpoint_info, "a") as f:
-            print(f"{self.checkpoint_path}\t{global_step}\t{eval_accuracy}", file=f)
+            print(f"{self.checkpoint_path}\t{global_step_val}\t{eval_accuracy}", file=f)
         self.last_checkpoint_path = self.saver.save(self.session, self.checkpoint_path, global_step=self.global_step)
 
     def restore_last(self) -> None:
@@ -178,10 +176,10 @@ class Model:
             feed_dict[self.labels] = batch['labels']
         return feed_dict
 
-    def train_batch(self, batch: Dict[str, Union[np.ndarray, bool]]) -> List[Any]:
+    def train_batch(self, batch: Dict[str, Union[np.ndarray, bool]]) -> int:
         self.session.run(self.reset_metrics)
-        fetches = [self.training_step, self.summaries["train"]]
-        return self.session.run(fetches, self._build_feed_dict(batch, is_training=True))
+        fetches = [self.global_step, self.training_step, self.summaries["train"]]
+        return self.session.run(fetches, self._build_feed_dict(batch, is_training=True))[0]
 
     def _pre_train(self, data: Datasets) -> None:
         pass
@@ -198,7 +196,6 @@ class Model:
             return best_acc
 
         self._pre_train(data)
-
         best_eval_acc = .0
         step = 0
         with tqdm.tqdm(range(epochs), desc="Epochs") as epoch_tqdm:
@@ -207,12 +204,11 @@ class Model:
                 with tqdm.tqdm(range(batch_count), desc=f"Batches [Epoch {epoch}]") as batch_tqdm:
                     for _ in batch_tqdm:
                         batch = next(batch_generator)
-                        self.train_batch(batch)
+                        step = self.train_batch(batch)
                         # Can be enabled, but takes up time during training
                         # batch_tqdm.set_postfix(self._train_metrics())
                         if step % evaluate_every_steps == 0:
                             best_eval_acc = _eval(best_eval_acc, step)
-                        step += 1
                 if step % evaluate_every_steps == 0:
                     best_eval_acc = _eval(best_eval_acc, step)
 
