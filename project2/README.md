@@ -54,12 +54,12 @@ The story cloze test 2016 accuracy is printed at the end of standard output, and
 ## Other make commands
 
 ```
-make clean  # format source code
-make check  # check formatting and types
-make job    # train on Leonhard with sct/flags.py as flags (must be logged in)
-make output # watch job output on Leonhard
-make status # watch job status on Leonhard
-make test   # run unit tests (not used extensively)
-make train  # train locally with sct/flags.py as flags
-make runall # run all experiments in sct/experiments one after each other (currently only roemmele*)
+make clean   # format source code
+make check   # check formatting and types
+make job     # train on Leonhard with sct/flags.py as flags (must be logged in)
+make output  # watch job output on Leonhard
+make status  # watch job status on Leonhard
+make test    # run unit tests (not used extensively)
+make train   # train locally with sct/flags.py as flags
+make run_all # run all experiments in sct/experiments one after each other (currently only roemmele*)
 ```

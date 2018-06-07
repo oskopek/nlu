@@ -28,4 +28,7 @@ status:
 output:
 	bpeek -f
 
-.PHONY: requirements train check test job status output
+run_all:
+	./run_all.sh
+
+.PHONY: requirements train check test job status output run_all

@@ -13,9 +13,9 @@ for file in `ls sct/experiments/`; do
         expname="`basename $flags`"
         echo "Running experiment $expname..."
         if [[ -z $last_name ]]; then
-            bsub -J "$expname" -W 04:00 -n 4 -R "rusage[mem=8192,ngpus_excl_p=1]" cp "$flags" "$new_flags" && python -m sct.train $@
+            bsub -J "$expname" -W 04:00 -n 4 -R "rusage[mem=8192,ngpus_excl_p=1]" "cp "$flags" "$new_flags" && python -m sct.train $@"
         else
-            bsub -J "$expname" -w ended("$last_name") -W 04:00 -n 4 -R "rusage[mem=8192,ngpus_excl_p=1]" cp "$flags" "$new_flags" && python -m sct.train $@
+            bsub -J "$expname" -w 'ended('"$last_name"')' -W 04:00 -n 4 -R "rusage[mem=8192,ngpus_excl_p=1]" "cp "$flags" "$new_flags" && python -m sct.train $@"
         fi
         last_name="$expname"
         echo "Submitted experiment $expname."
