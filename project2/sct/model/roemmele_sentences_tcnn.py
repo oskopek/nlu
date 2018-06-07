@@ -37,7 +37,7 @@ class RoemmeleSentencesTCNN(RoemmeleSentences):
         expanded = tf.expand_dims(per_sentence_states, axis=-1)
         pooled = []
         for kernel_size in [3, 4, 5]:  # [3, 4, 5, 7]
-            c = RoemmeleSentencesRCNN._1d_conv(
+            c = self._1d_conv(
                     expanded,
                     num_outputs=self.num_filters,
                     kernel_size=(kernel_size, self.sentence_embedding),

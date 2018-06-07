@@ -16,8 +16,8 @@ class RoemmeleSentencesBiRNN(RoemmeleSentences):
         cell_bw = cell_fw
 
         inputs = per_sentence_states
-        _, (state_fw, state_bw) = tf.nn.bidirectional_dynamic_rnn(cell_fw=cell_fw, cell_bw=cell_bw, inputs=inputs,
-            dtype=tf.float32)
+        _, (state_fw, state_bw) = tf.nn.bidirectional_dynamic_rnn(
+                cell_fw=cell_fw, cell_bw=cell_bw, inputs=inputs, dtype=tf.float32)
         if self.rnn_cell == "LSTM":
             state_fw = state_fw[0]  # c_state
             state_bw = state_bw[0]  # c_state

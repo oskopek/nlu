@@ -24,7 +24,7 @@ def define_flags() -> None:
             'model', 'RoemmeleSentences',
             'Model class name. Models that have "sentences" in their name have different data preprocessing steps.')
     flags.DEFINE_integer('roemmele_multiplicative_factor', 1, 'How many negative endings to sample. Need 1 for '
-                                                              '`add` not None.')
+                         '`add` not None.')
     flags.DEFINE_string('add', 'data/add.npy', 'Whether and which constant add to use for negative labels.')
     flags.DEFINE_bool('eval_train', False, 'Train on first 80% of eval dataset, eval on rest.')
     flags.DEFINE_bool('balanced_batches', False, 'Train with label-balanced batches.')

@@ -89,7 +89,10 @@ class Model:
         self.num_chars = num_chars
         self.learning_rate = learning_rate
         self.save_dir = os.path.join(f"{logdir}", f"{datetime.now().strftime('%Y-%m-%d_%H%M%S')}-{expname}")
-        self.checkpoint_path = os.path.join(self.save_dir, "checkpoints", "model.ckpt")
+        checkpoint_dir = os.path.join(self.save_dir, "checkpoints")
+        os.makedirs(checkpoint_dir, exist_ok=True)
+        self.checkpoint_info = os.path.join(checkpoint_dir, "checkpoint_info.tsv")
+        self.checkpoint_path = os.path.join(checkpoint_dir, "model.ckpt")
 
         self.SENTENCES = SENTENCES
         self.ENDINGS = ENDINGS
@@ -114,8 +117,9 @@ class Model:
             self._summaries_and_init()
             print("Trainable variables:", tf.trainable_variables())
 
-    def save(self) -> str:
-        # Do not save checkpoints.
+    def save(self, eval_accuracy: float) -> str:
+        with open(self.checkpoint_info, "a") as f:
+            print(f"{self.checkpoint_path}\t{self.global_step}\t{eval_accuracy}", file=f)
         return self.saver.save(self.session, self.checkpoint_path, global_step=self.global_step)
 
     def build_model(self) -> Tuple[tf.Tensor, tf.Tensor, tf.Operation]:
@@ -171,6 +175,7 @@ class Model:
 
     def _train(self, data: Datasets, epochs: int, batch_size: int = 1) -> None:
         self._pre_train(data)
+        best_eval_acc = .0
         with tqdm.tqdm(range(epochs), desc="Epochs") as epoch_tqdm:
             for epoch in epoch_tqdm:
                 batch_count, batch_generator = data.train.batches_per_epoch(batch_size)
@@ -180,15 +185,19 @@ class Model:
                         self.train_batch(batch)
                         # Can be enabled, but takes up time during training
                         # batch_tqdm.set_postfix(self._train_metrics())
-                self.save()
-                epoch_tqdm.set_postfix(self._eval_metrics(data, batch_size=batch_size))
+
+                metrics = self._eval_metrics(data, batch_size=batch_size)
+                epoch_tqdm.set_postfix(metrics)
+                eval_acc = float(metrics["eval_acc"])
+                if eval_acc > best_eval_acc:
+                    best_eval_acc = eval_acc
+                    self.save(best_eval_acc)
 
     def train(self, data: Datasets, epochs: int, batch_size: int = 1) -> None:
         try:
             self._train(data, epochs, batch_size=batch_size)
         except KeyboardInterrupt:
-            print("Cancelling training and saving model...")
-            print(f"Done: {self.save()}")
+            print("Cancelling training...")
 
     def evaluate_epoch(self, data: StoriesDataset, dataset: str, batch_size: int = 1) -> List[float]:
         self.session.run(self.reset_metrics)
