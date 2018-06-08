@@ -88,8 +88,6 @@ The mechanisms were designed for translation in a sequence to sequence fashion. 
 \subsection{Temporal CNN}
 Instead of an RNN, we ran several temporal convolutions with different kernel sizes (3,4,5) on these embeddings in parallel, similar to Kim \citep{Kim2014ConvolutionalClassification}. Lastly, we concatenate the CNN feature maps and use a 300 output sized hidden dense layer with Dropout. The motivation for Temporal CNN was a potential speed-up due to parallelization that is not possible with Gated Recurrent Units (GRUs), at the expense of a higher number of model parameters (30 million in the TCNN model compared to 17.4 million in the GRU model. Due to the number of parameters and the short length of sequences (5), the potential parallelization advantage was not fully leveraged, and the TCNN model was actually slower during training.
 
-\subsection{Generative approach}
-We did not attempt to use generative methods for this task, because when trained to generate positive endings, we found no reasonable way to use this model to  and then we treat them as negative endings during inference (TODO: Better wording. TODO: Maybe move to a different section). Future work might include implementing a generative model conditioned on the labels with negative ending sampling. We liked the idea of using reinforcement learning as suggested by Fedus\,et.\,al.\,\citep{Fedus2018MaskGAN:_______} especially because the generator is not differentiable due to the $\mathrm{argmax}$ function.
 
 
 \section{Training}\label{sec:training}
@@ -98,21 +96,34 @@ All models are trained with a dense layer with one sigmoid-activated output at t
 We ran all experiment on GeForce GTX 1080 Ti on ETH Leonhard cluster. Data processing takes about 15 minutes and training a single epoch about 5 minutes. The difference between the different models are negligible.
 
 \section{Experiments}\label{sec:experiments}
-We trained all models on training data for 10 epochs and evaluated on the validation dataset after every 2000 steps. The TCNN model was trained for 30 epochs.
+We trained all models on training data for 10 epochs and evaluated on the validation dataset after every 2000 steps.
+The TCNN model was trained for 30 epochs.
 
-During the evaluation, we keep the best 3 checkpoints of every model, according to validation set accuracy. Finally, we measure the accuracy on the test dataset (ROC 2016), using the best of the three checkpoints for each model. 
+During the evaluation, we keep the best 3 checkpoints of every model, according to validation set accuracy.
+Finally, we measure the accuracy on the test dataset (ROC 2016), using the best of the three checkpoints for each model. 
 
-The results are presented in Table \ref{tab:results}. Interestingly, our implementation of Roemmele's model performs significantly better than the original implementation, according to the reported accuracies. We believe this might be caused by the superior quality of the pre-trained Skip-Thought embeddings we used.
+The results are presented in Table \ref{tab:results}.
+Interestingly, our implementation of Roemmele's model performs significantly better than the original implementation,
+according to the reported accuracies. We believe this might be caused by the superior quality of the pre-trained Skip-Thought embeddings we used.
 
-Generating sentence embeddings for negative endings from the embedding of the correct ones has failed to reach even 60\% in accuracy. Unlike with word embeddings, the sentences encode more information; thus have higher variability, and our approach is too simple to succeed.
+Generating sentence embeddings for negative endings from the embedding of the correct ones has proven to have potential,
+however as due to the nature of the method we trained with labels in a 1:1 ratio instead of 1:6,
+the model converged very quickly and started overfitting. We believe generating more negative samples or decreasing the model complexity would help.
 
-As shown in Table \ref{tab:results}, LSTMs generalize better and GRU, which is caused by the extra gates in the cell. Large scale comparison of RNN cells confirms that LSTMs achieve the best performance in NLU tasks\citep{JozefowiczAnArchitectures}. It has too many parameters given our task setting. Bi-directional GRU also falls behind because the right context is not important. Moreover, Srinivasan\,et\,al.\,\citep{Srinivasan2018ATest} show that the last sentence is the most important information for this task, which confirms our claim. 
+As shown in Table \ref{tab:results}, LSTMs generalize better than GRUs (almost no difference between validation and test), which is probably caused by the extra gates in the cell.
+A large-scale comparison of RNN cells confirms that out of a lot of cells, LSTMs achieve the best performance in NLU tasks\citep{JozefowiczAnArchitectures}.
 
-Our CNN reaches comparable results with less parameters; however, the performance boost is not noticeable probably because the RNN sequences are too short (5 nodes) and the sequential processing is not the bottleneck. 
+The vanilla RNN is too simple to learn meaningful features from context and does not reach 60\% accuracy.
 
-\textbf{TODO: Rewrite this section based on the actual results.}
+The bi-directional GRU falls behind in accuracy because the right context is likely not that important (backward pass).
+Moreover, Srinivasan\,et\,al.\,\citep{Srinivasan2018ATest} show that the last sentence is the most important information for this task, which confirms our claim.
 
-Our best model (chosen based on validation accuracy) is RNN GRU (ours) and the best checkpoint can be downloaded from PolyBox\footnote{\url{https://polybox.ethz.ch/index.php/s/yUr8Iga0OLZ8p6B}}.
+Both attention models perform just as well as the respective models without them. This points to the fact that the attention mechanisms are not useful here (short sequences), the RNN cells have enough capacity to capture the context on their own. We also tried running models without the RNN (just with the attention), but this failed to achieve accuracy above 60\%.
+
+Our CNN reaches comparable results; however, the envisioned performance boost is not noticeable, because the RNN sequences are probably too short (5 nodes), and the sequential processing is not the bottleneck in our case.
+On the other hand, the CNN also has about twice as many parameters compared to the GRU.
+
+Overall, our best model (chosen based on validation accuracy) is RNN GRU (ours) and the best checkpoint can be downloaded from PolyBox\footnote{\url{https://polybox.ethz.ch/index.php/s/yUr8Iga0OLZ8p6B}}.
 
 \begin{table}[btp]\centering
 \begin{tabular}{lcc}
@@ -138,6 +149,12 @@ Temporal CNN   	& 0.689	 	 		  & 0.661\\\bottomrule
 \end{table}
 
 \section{Future Work}\label{sec:futurework}
+We did not attempt to use generative methods for this task, because of the discrepancy in goals between training
+to generate positive endings and later using the model to generate or evaluate negative endings \citep{TCGAN} \textbf{TODO + compare in results table}.
+Future work might include designing a generative model conditioned on the labels with negative ending sampling.
+We liked the idea of using reinforcement learning as suggested by Fedus\,et.\,al.\,\citep{Fedus2018MaskGAN:_______},
+especially because the generator in this scenario is not differentiable due to the $\mathrm{argmax}$ function for obtaining predictions.
+
 We believe that the key to getting closer to solving the Story Cloze task is semi-supervised learning, together with generative methods. The lack of negative endings makes change this task for a simple binary classification problem to a conceptually hard problem to model. As mentioned above, training a conditional generative model (possibly a GAN) to sample realistic positive and negative endings from might prove to be useful as pre-training, after which the model could be left to improve without the label conditioning. In our opinion, several important parts in this concept are still missing.
 
 For a more short-term approach, we would consider various semi-supervised approaches leveraging the well-trained embeddings space of the pre-trained Skip-Thought embeddings, similar to our constant negative embedding experiment. One can imagine a smart strategy of negative ending re-sampling based on the current trained model could converge to better results.
