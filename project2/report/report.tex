@@ -13,8 +13,8 @@
 
 \usepackage[utf8]{inputenc} % allow utf-8 input
 \usepackage[T1]{fontenc}    % use 8-bit T1 fonts
-\usepackage{hyperref}       % hyperlinks
-\usepackage{url}            % simple URL typesetting
+\PassOptionsToPackage{hyphens}{url}\usepackage{hyperref} % hyperlinks
+\usepackage[hyphens]{url}            % simple URL typesetting
 \usepackage{booktabs}       % professional-quality tables
 \usepackage{amsfonts}       % blackboard math symbols
 \usepackage{nicefrac}       % compact symbols for 1/2, etc.
@@ -59,70 +59,58 @@ Another big difficulty is the large natural variability in plausible and implaus
 
 In our project, we decided to sample the negative endings from the other endings in the training dataset. We reproduced the work by Roemmele\,et\,al.\,\citep{Roemmele2017AnTest} and managed to increase the accuracy. The improved accuracy is achieved using multiple approaches.
 
-% \section{Failures}
-% We implemented the following variations of Roemmele's work: vanilla RNN (with a basic RNN cell), temporal CNN for text sequences \citep{Kim2014ConvolutionalClassification}, Bahdanau \citep{BahdanauEND-TO-ENDRECOGNITION} and Luong \citep{Luong2015EffectiveTranslation} Attention, LSTM \citep{Hochreiter1997LONGMEMORY}. None of these methods achieved significantly better performance than the original Roemmele \citep{Roemmele2017AnTest} work. 
 
-%Ideally you introduce the task already in a way that highlights the difficulties your method will tackle.
 
 \section{Methodology \& Model}\label{sec:methodology}
 Our method follows closely the method described in Roemmele\,et\,al.\,\citep{Roemmele2017AnTest}. We use a discriminative binary classifier conditioned on the context sentence. Given the first 4 sentences, the classifier assigns a probability of being a plausible ending to the last sentence. To overcome the lack of negative endings during training, we sample them randomly from other endings the training dataset. Our models utilize the BookCorpus \citep{Zhu2015AligningBooks} dataset by embedding the story and ending sentences using a pre-trained embedding model. Specifically, we use Skip-Thought sentence embeddings \citep{Kiros2015Skip-ThoughtVectors}.\footnote{We use the implementation in TensorFlow Models by Chris Shallue: \url{https://github.com/tensorflow/models/tree/master/research/skip_thoughts}} We concatenate the sentence embeddings from both uni-skip and bi-skip Skip-Thought models. Our experiments have shown that using both embedding models yields the best results (as already noted in the original paper). The binary classifier takes the Skip-Thought embeddings, and predicts the last sentence's plausibility (probability of it being a plausible ending). During validation, the model chooses the most probable ending of the two candidates.
 
 \subsection{Re-implementation of RNN GRU}
-We ran a static one-directional 1000-dimensional GRU RNN network on the five Skip-Thought embeddings. We use the final state as input to an dense output layer with one output neuron, with a sigmoid activation function -- which models the conditional probability that the last sentence is plausible.
+We ran a static one-directional 1000-dimensional GRU RNN on the five Skip-Thought embeddings. We use the final state as input to an dense output layer with one output neuron, with a sigmoid activation function -- which models the conditional probability that the last sentence is plausible.
 
-\subsection{RNN with different cells}
-After reimplementing the original work, we investigated the impact of replacing the original GRU cell with the more powerful LSTM cell and a simple basic RNN cell (dense layer and $\tanh$ activation function). Since Dropout \citep{Srivastava2014} has been shown to improve performance of models in many use cases, we tried to apply a Dropout layer on the inputs of the GRU cell, but the effects on performance were not significant.
+After reimplementing the original work, we investigated the impact of replacing the original GRU cell with more powerful LSTM cells and a basic RNN cell (dense layer and $\tanh$ activation). Since Dropout \citep{Srivastava2014} has been shown to improve performance of models in many use cases, we tried to apply a Dropout layer on the inputs of the GRU cell, but the effects on performance were not significant.
 
 \subsection{RNN shifted negative endings}
-Inspired by a blog post\footnote{Ed Rushton and Jeremy P Howard. Any libraries/dictionaries out there for fixing common spelling errors? \textit{forums.fast.ai}, 2018. URL: \url{http://forums.fast.ai/t/nlp-any-libraries-dictionaries-out-there-for-fixing-common-spelling-errors/16411/8}.} claiming that misspellings in word embeddings can be calculated using the difference between a misspelled word and a correct word, we tried to generate sentence embeddings of the negative endings for the positive endings in the training dataset. 
+Inspired by a forum post\footnote{\url{http://forums.fast.ai/t/nlp-any-libraries-dictionaries-out-there-for-fixing-common-spelling-errors/16411/8}} claiming that misspellings in word embeddings can be calculated using the difference between a misspelled word and a correct word, we tried to generate sentence embeddings of the negative endings for the positive endings in the training dataset.
 
-Using the first 100 stories in the evaluation set, we calculated the average difference between the wrong endings and the correct endings. Then we trained our binary classifier with negative endings calculated as the sum of correct ending and the pre-calculated average difference.
-
-We realize that in high-dimensional spaces, it is more common to use cosine similarity. Unfortunately, we did not come up with an idea of how to sample negative endings with given cosine distance from the correct ending.
+Using the first 100 stories in the evaluation set, we calculated the average difference between the wrong and correct endings. We then trained our binary classifier with negative endings calculated as the sum of correct ending and the pre-calculated average difference.
+We realize that in high-dimensional spaces, it is more common to use cosine similarity. Unfortunately, we did not come up with an idea of how to sample negative endings with a given cosine distance from the correct ending.
 
 \subsection{RNN with attention}
-As a logical next step after training a simple RNN, we try adding an attention mechanism -- both multiplicative (Luong \citep{Luong2015EffectiveTranslation}) and additive (Bahdanau \citep{Bahdanau2016End-to-EndRecognition}) -- to the model. Given that the sequences are short, we do not expect a big increase in performance.
-
-The mechanisms were designed for translation in a sequence to sequence fashion. For our use case, we have a a 5-step sequence on the ``encoder'' side and a ``single-step'' sequence on the ``decoder'' side (the final state from our RNN). We compute alignments and successively the averaged attention state, and concatenate it to the RNN's final state before passing both to the fully-connected output layer as previously mentioned.
+A natural step is adding an attention mechanism to the model -- both multiplicative (Luong \citep{Luong2015EffectiveTranslation}) and additive (Bahdanau \citep{Bahdanau2016End-to-EndRecognition}). Given that the sequences are short, the performance increase should not be large.
+The mechanisms were designed for translation in a sequence to sequence way. We use a 5-step sequence on the ``encoder'' side and a 1-step sequence on the ``decoder'' side (the final RNN state). We compute alignments and successively the averaged attention state, and concatenate it to the RNN's final state before passing both to the fully-connected output layer as previously mentioned.
 
 \subsection{Temporal CNN}
-Instead of an RNN, we ran several temporal convolutions with different kernel sizes (3,4,5) on these embeddings in parallel, similar to Kim \citep{Kim2014ConvolutionalClassification}. Lastly, we concatenate the CNN feature maps and use a 300 output sized hidden dense layer with Dropout. The motivation for Temporal CNN was a potential speed-up due to parallelization that is not possible with Gated Recurrent Units (GRUs), at the expense of a higher number of model parameters (30 million in the TCNN model compared to 17.4 million in the GRU model. Due to the number of parameters and the short length of sequences (5), the potential parallelization advantage was not fully leveraged, and the TCNN model was actually slower during training.
+Instead of an RNN, we ran several temporal convolutions with different kernel sizes (3,4,5) on these embeddings in parallel, similar to Kim \citep{Kim2014ConvolutionalClassification}. Lastly, we concatenate the CNN feature maps and use a 300-output hidden dense layer with Dropout. The motivation for Temporal CNN was a potential speed-up due to parallelization that is not possible with Gated Recurrent Units (GRUs), at the expense of a higher number of model parameters (30 million in the TCNN model compared to 17.4 million in the GRU model). Due to the number of parameters and the short length of sequences (5), the potential parallelization advantage was not fully leveraged, and the TCNN was actually slower during training.
 
 
 
 \section{Training}\label{sec:training}
-All models are trained with a dense layer with one sigmoid-activated output at the end, and a cross-entropy loss function with labels 0 and 1. The label 1 means that the ending is plausible, and 0 means it is not. We sampled random negative endings from other stories with the same ratio 1:6 as in Roemmele\,et\,al. We use mini-batches of size 100 and clip gradients to a maximum $L_2$ norm of 10. In terms of optimization, we tried Adam \citep{Kingma2015}, AdaDelta \citep{Zeiler2012ADADELTA:Method}, RMSProp \citep{HintonNeuralDescent}, and standard SGD, all of them with learning rate $0.001$. Our experiments confirmed that RMSProp \citep{HintonNeuralDescent} achieves the highest scores for all models except for the Temporal CNN model, where Adam performed better.
-
-We ran all experiment on GeForce GTX 1080 Ti on ETH Leonhard cluster. Data processing takes about 15 minutes and training a single epoch about 5 minutes. The difference between the different models are negligible.
+All models are trained with a dense layer with one sigmoid-activated output at the end, and a cross-entropy loss function with labels 0 and 1. The label 1 means that the ending is plausible, and 0 means it is not. We sampled random negative endings from other stories with the same ratio 1:6 as in Roemmele\,et\,al. We use mini-batches of size 100 and clip gradients to a maximum $L_2$ norm of 10. In terms of optimization, we tried Adam, AdaDelta, RMSProp, and standard SGD, all of them with learning rate $0.001$. Our experiments confirmed that RMSProp achieves the highest scores for all models except for the Temporal CNN model, where Adam performed better.
+We ran all experiment on GeForce GTX 1080 Ti on ETH Leonhard cluster. Data processing takes about 15 minutes and training a single epoch about 5 minutes (model times differ minimally).
 
 \section{Experiments}\label{sec:experiments}
-We trained all models on training data for 10 epochs and evaluated on the validation dataset after every 2000 steps.
-The TCNN model was trained for 30 epochs.
+We trained all models for 10 epochs (TCNN 30 epochs) and evaluated every 2000 steps.
+We keep the three best checkpoints of every model, according to validation set accuracy.
+Finally, we measure the accuracy on the test dataset (ROC 2016), using the best checkpoint for each model (Table \ref{tab:results}).
 
-During the evaluation, we keep the best 3 checkpoints of every model, according to validation set accuracy.
-Finally, we measure the accuracy on the test dataset (ROC 2016), using the best of the three checkpoints for each model. 
+Our implementation of Roemmele's GRU model performs significantly better than the original implementation,
+according to reported accuracies. We believe this might be because of the superior quality of our pre-trained Skip-Thought embeddings.
 
-The results are presented in Table \ref{tab:results}.
-Interestingly, our implementation of Roemmele's model performs significantly better than the original implementation,
-according to the reported accuracies. We believe this might be caused by the superior quality of the pre-trained Skip-Thought embeddings we used.
-
-Generating sentence embeddings for negative endings from the embedding of the correct ones has proven to have potential,
-however as due to the nature of the method we trained with labels in a 1:1 ratio instead of 1:6,
+Generating sentence embeddings for negative endings from the embedding of the correct ending has proven to have potential,
+however due to the nature of the method we trained with labels in a 1:1 ratio instead of 1:6, and
 the model converged very quickly and started overfitting. We believe generating more negative samples or decreasing the model complexity would help.
 
-As shown in Table \ref{tab:results}, LSTMs generalize better than GRUs (almost no difference between validation and test), which is probably caused by the extra gates in the cell.
-A large-scale comparison of RNN cells confirms that out of a lot of cells, LSTMs achieve the best performance in NLU tasks\citep{JozefowiczAnArchitectures}.
-
-The vanilla RNN is too simple to learn meaningful features from context and does not reach 60\% accuracy.
+LSTMs generalized better than GRUs (almost no difference between validation and test), which is probably caused by the extra gates in the LSTM.
+A large-scale comparison of RNN cells confirms that LSTMs achieve the best performance in NLU tasks \citep{JozefowiczAnArchitectures}.
+A vanilla RNN is too simple to learn meaningful features from context and does not reach 60\% accuracy.
 
 The bi-directional GRU falls behind in accuracy because the right context is likely not that important (backward pass).
-Moreover, Srinivasan\,et\,al.\,\citep{Srinivasan2018ATest} show that the last sentence is the most important information for this task, which confirms our claim.
+Srinivasan\,et\,al.\,\citep{Srinivasan2018ATest} show that the last sentence is most important for this task, which confirms our claim.
+Both attention models perform just as well as the models without them, hence they might not be useful with the short sequences -- the RNN cells have enough capacity to capture the context.
+We also tried running models without the RNN (just with attention), but they failed to achieve accuracy above 60\%.
 
-Both attention models perform just as well as the respective models without them. This points to the fact that the attention mechanisms are not useful here (short sequences), the RNN cells have enough capacity to capture the context on their own. We also tried running models without the RNN (just with the attention), but this failed to achieve accuracy above 60\%.
-
-Our CNN reaches comparable results; however, the envisioned performance boost is not noticeable, because the RNN sequences are probably too short (5 nodes), and the sequential processing is not the bottleneck in our case.
-On the other hand, the CNN also has about twice as many parameters compared to the GRU.
-
+TCNN reaches comparable results; however, the envisioned performance boost is not noticeable, because the RNN sequences are probably too short (5 nodes), and the sequential processing is not the bottleneck here.
+On the other hand, TCNN also has about twice as many parameters as the GRU.
 Overall, our best model (chosen based on validation accuracy) is RNN GRU (ours) and the best checkpoint can be downloaded from PolyBox\footnote{\url{https://polybox.ethz.ch/index.php/s/yUr8Iga0OLZ8p6B}}.
 
 \begin{table}[btp]\centering
@@ -150,14 +138,18 @@ Temporal CNN   	& 0.689	 	 		  & 0.661\\\bottomrule
 
 \section{Future Work}\label{sec:futurework}
 We did not attempt to use generative methods for this task, because of the discrepancy in goals between training
-to generate positive endings and later using the model to generate or evaluate negative endings \citep{Wang2017ConditionalComprehension}. Wang\,et\,al.\,used conditioned
-Future work might include designing a generative model conditioned on the labels with negative ending sampling.
-We liked the idea of using reinforcement learning as suggested by Fedus\,et.\,al.\,\citep{Fedus2018MaskGAN:_______},
-especially because the generator in this scenario is not differentiable due to the $\mathrm{argmax}$ function for obtaining predictions.
+to generate positive endings and later evaluating negative endings \citep{Wang2017ConditionalComprehension}.
+Future work might include designing a generative model conditioned on the labels with negative ending sampling,
+potentially using reinforcement learning as suggested by Fedus\,et.\,al.\,\citep{Fedus2018MaskGAN:_______},
+especially because the generator would not differentiable due to the $\mathrm{argmax}$ function for predictions.
 
-We believe that the key to getting closer to solving the Story Cloze task is semi-supervised learning, together with generative methods. The lack of negative endings makes change this task for a simple binary classification problem to a conceptually hard problem to model. As mentioned above, training a conditional generative model (possibly a GAN) to sample realistic positive and negative endings from might prove to be useful as pre-training, after which the model could be left to improve without the label conditioning. In our opinion, several important parts in this concept are still missing.
+We believe that the key to solving the task are generative methods with semi-supervised learning.
+The lack of negative endings changes this task from a simple binary classification to a conceptually hard problem to model.
+As mentioned above, training a conditional generative model (possibly a GAN) to sample realistic positive and negative endings might prove to be useful as pre-training,
+after which the model could be left to improve without labels conditioning.
 
-For a more short-term approach, we would consider various semi-supervised approaches leveraging the well-trained embeddings space of the pre-trained Skip-Thought embeddings, similar to our constant negative embedding experiment. One can imagine a smart strategy of negative ending re-sampling based on the current trained model could converge to better results.
+Also a possibility are various semi-supervised approaches leveraging the well-trained embedding space of the Skip-Thought embeddings,
+similar to our constant negative embedding experiment. With a smart strategy of negative ending re-sampling based on the currently trained model, it could converge to better results.
 
 \section{Conclusion}\label{sec:conclusion}
 We re-implemented the model from Roemmele\,et\,al.\,\citep{Roemmele2017AnTest} and achieved an even higher accuracy. Furthermore, we explored several variations of the model and analyzed their performance. Our experiments confirm that a GRU RNN in combination with pre-trained Skip-Thought embeddings achieves the best results. Even though our reported results are close to state-of-the-art, current models clearly aren't powerful enough with the currently available data and computation to learn a ``world-view'' notion, and therefore fall short of human performance.
