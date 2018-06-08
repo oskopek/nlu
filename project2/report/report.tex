@@ -150,7 +150,7 @@ Temporal CNN   	& 0.689	 	 		  & 0.661\\\bottomrule
 
 \section{Future Work}\label{sec:futurework}
 We did not attempt to use generative methods for this task, because of the discrepancy in goals between training
-to generate positive endings and later using the model to generate or evaluate negative endings \citep{TCGAN} \textbf{TODO + compare in results table}.
+to generate positive endings and later using the model to generate or evaluate negative endings \citep{Wang2017ConditionalComprehension}. Wang\,et\,al.\,used conditioned
 Future work might include designing a generative model conditioned on the labels with negative ending sampling.
 We liked the idea of using reinforcement learning as suggested by Fedus\,et.\,al.\,\citep{Fedus2018MaskGAN:_______},
 especially because the generator in this scenario is not differentiable due to the $\mathrm{argmax}$ function for obtaining predictions.
@@ -164,4 +164,3 @@ We re-implemented the model from Roemmele\,et\,al.\,\citep{Roemmele2017AnTest} a
 
 \bibliography{Mendeley}
 \end{document}
-
