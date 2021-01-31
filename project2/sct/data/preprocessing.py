@@ -12,6 +12,7 @@ PreprocessingMethod = Callable[[pd.DataFrame, ArgsType, bool], pd.DataFrame]
 Vocab = Dict[str, int]
 InvVocab = Dict[int, str]
 
+nltk.download('punkt')
 
 # TODO(oskopek): Add support for external vocabularies.
 # TODO(oskopek): Add implementation for the evaluation=True flag.

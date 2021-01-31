@@ -31,7 +31,7 @@ def test_standardize() -> None:
     preprocessing_compare(
             Preprocessing(standardize=True),
             inp=["Lol, lol2!!!", "Test....", "Test ."],
-            exp=["lol , lol2 ! ! !", "test ... .", "test ."])
+            exp=["lol , lol2 ! ! !", "test ....", "test ."])
 
 
 def test_vocab_downsize() -> None:
