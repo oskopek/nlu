@@ -6,7 +6,7 @@ numpy
 pandas
 pytest
 seaborn
-tensorflow==1.7.0
+tensorflow==2.5.1
 tensorboard==1.7.0
 tqdm
 yapf
