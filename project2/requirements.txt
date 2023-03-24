@@ -6,7 +6,7 @@ numpy
 pandas
 pytest
 seaborn
-tensorflow-gpu==1.7.0
+tensorflow-gpu==2.12.0
 tensorboard==1.7.0
 tqdm
 yapf
